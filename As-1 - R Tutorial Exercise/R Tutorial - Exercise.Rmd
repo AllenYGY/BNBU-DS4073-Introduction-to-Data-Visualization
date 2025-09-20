@@ -1,0 +1,162 @@
+---
+title: "R Tutorial - Exercise"
+author: "Junya YANG 2230026188"
+date: "2025 Sep 20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Q1. Let $x$ be defined as follow.\
+a. Add 3 to just the even-index elements.\
+b. Compute the square root of each element.
+
+```{r}
+x <- c(11,10,5,9,14,12,18,2,17,9,1,7,1,15,16,7,16,12,13,3,8,3,11,1,5,7,7,10,6,10,17,13,1,2,17,1,15,8,12,3,6,15,10,3,10,12,19,17,15,12,18,17,1,13,5,9,18,2,20,16,15,7,9,12,12,5,5,7,7,9,17,7,15,11,10,12,19,8,13,3,7,14,13,18,1,11,18,1,12,18,5,12,5,10,3,6,11,12,1,3)
+```
+
+```{r}
+# Write your answer here
+#len = length(x)
+#even_idx = seq(from=2,to =len,by=2)
+#x[even_idx] = x[even_idx]+3
+x[c(FALSE, TRUE)]=x[c(FALSE, TRUE)]+3
+print(x)
+x=sqrt(x)
+print(x)
+```
+
+Q2. Given x = [3 15 9 12 -1 -12 9 6 1], provide the command that will\
+a) set the values of x that are positive to zero\
+b) set values that are multiples of 3 to 3\
+c) multiply the values of x that are even by 5\
+d) extract the values of x that are greater than 10 into a vector called y\
+e) Find the index position of elements in x which are larger than 4
+
+```{r}
+# Write your answer here
+# a) set the values of x that are positive to zero
+x =c(3,15,9,12,-1,-12,9,6,1)
+x[x>0]=0
+print(x)
+# b) set values that are multiples of 3 to 3
+x =c(3,15,9,12,-1,-12,9,6,1)
+x[x%%3==0]=3
+print(x)
+# c) multiply the values of x that are even by 5
+x =c(3,15,9,12,-1,-12,9,6,1)
+x[x%%2==0]=x[x%%2==0]*5
+print(x)
+# d) extract the values of x that are greater than 10 into a vector called y
+x =c(3,15,9,12,-1,-12,9,6,1)
+y=x[x>10]
+print(y)
+# e) Find the index position of elements in x which are larger than 4
+x =c(3,15,9,12,-1,-12,9,6,1)
+len = length(x)
+list_idx = c(1:len)
+idx = list_idx[x>4]
+#idx <- which(x > 4)
+print(idx)
+
+```
+
+Q3. Given the matrix A as following
+
+```{r}
+a <- c(2,4,1,6,7,2,3,5,9)
+A <- matrix(a, nrow=3, ncol=3, byrow=T)
+A
+```
+
+provide the commands needed to\
+a) assign the last 2 rows of A to a matrix called y\
+b) compute the sum over the columns of A\
+c) compute the sum over the rows of A\
+d) compute the standard deviation of each column of A\
+e) Standardize the matrix A such that columns of A are centered to have mean 0 and scaled to have standard deviation 1.
+
+```{r}
+# Write your answer here
+# a) assign the last 2 rows of A to a matrix called y
+y = tail(A,2)
+print(y)
+# b) compute the sum over the columns of A
+col_sum = apply(A,2,sum) # Option 1
+print(colSums(A)) # Option 2
+# c) compute the sum over the rows of A
+row_sum = apply(A,1,sum) 
+print(rowSums(A))
+# d) compute the standard deviation of each column of A
+col_sd = apply(A, 2, sd)
+print(col_sd)
+# e) Standardize the matrix A such that columns of A are centered to have mean 0 and scaled to have standard deviation 1.
+print(scale(A))
+
+```
+
+Q4. The data file “country.txt” in Ispace contains numerous population indicators for a sample of 115 countries. Read the data file into R and answer the following questions.\
+a. How many variables are included in the dataset?\
+b. What is the percentage of developing country (develop=1) in this data?\
+c. What is the standard deviation of the variable death rate?\
+d. What is the range of GDP for the countries in which death rate is greater than 8?\
+e. What is the mean of GDP for the developing countries which have death rate higher than 10?\
+f. What is the correlation coefficient between GDP and birthrate? Discuss the relationship between GDP and the birthrate.
+
+```{r}
+# Write your answer here
+# a. How many variables are included in the dataset?
+data <- read.table(file = "./country.txt",header=T)
+#print(ncol(data))
+x=dim(data)
+print(x[2])
+# b. What is the percentage of developing country (develop=1) in this data?
+num_developing=sum(data$develop==1)
+total_countries = nrow(data)
+percent = (num_developing/total_countries)*100
+print(percent)
+# c. What is the standard deviation of the variable death rate?
+sd_death = sd(data$deathrate)
+print(sd_death)
+# d. What is the range of GDP for the countries in which death rate is greater than 8?
+#countries=data[data$deathrate>8,"gdp"]
+countries=data[data$deathrate>8,]
+print(range(countries$gdp))
+#print(min(countries$gdp))
+#print(max(countries$gdp))
+# e. What is the mean of GDP for the developing countries which have death rate higher than 10?
+print(mean(data[data$develop==1 & data$deathrate>10,"gdp"]))
+# f. What is the correlation coefficient between GDP and birthrate? Discuss the relationship between GDP and the birthrate.
+print(cor(data$gdp, data$birthrate))
+print("It shows that there is a negative correlation between GDP and birthrate. This means that, in general, the higher a country's GDP, the lower its birth rate.")
+
+```
+
+Q5. Fibonacci sequence is defined by F(1)=F(2)=1 and F(n)=F(n–1)+F(n–2). Write an R function called `Fibonacci` which displays the first n Fibonacci numbers and computes their average. For example, if the input n is 20, the output of Fibonacci (20) shall look like:\
+The first 20 Fibonacci numbers are:\
+1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765\
+The average is 885.5
+
+Fill the blank in the code, then delete "eval=FALSE, message=TRUE" to run.
+
+```{r}
+Fibonacci <- function(n) {
+  if (n == 1) {
+    F <- c(1)
+  } else {
+    F <- c(1, 1)
+  }
+  if (n > 2) {
+    for (i in 3:n) {
+      next_num <- F[i-1] + F[i-2]
+      F <- c(F, next_num)
+    }
+  }
+  af <- mean(F)
+  cat(paste('The first', n, 'Fibonacci numbers are:'), '\n', F, '\n', paste('the average is', af))
+}
+
+Fibonacci(20)
+```

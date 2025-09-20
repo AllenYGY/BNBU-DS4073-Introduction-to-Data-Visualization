@@ -1,0 +1,290 @@
+---
+title: 'R Tutorial - Basic'
+author: Junya YANG 2230026188
+output: 
+  html_document:
+    css: style.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Prerequisites:**
+
+$\bullet$ Download R
+
+$\bullet$ Download R studio
+
+$\bullet$ Geometrics: How our data being displayed using point, line, histogram, bar, boxplot
+
+If you have no experience with the R language, here are some resources for getting started:
+
+$\bullet$ A (very) short introduction to R: <https://cran.r-project.org/doc/contrib/Torfs+Brauer-Short-R-Intro.pdf>
+
+$\bullet$ Getting up to speed with R: <https://rkabacoff.github.io/datavis/Rintro.pdf>
+
+# 1. R Overview
+
+R is a programming language and software environment for statistical analysis, graphics representation and reporting. The core of R is an interpreted computer language which allows branching and looping as well as modular programming using functions.
+
+**Rstudio** is an Integrated Development Environment (IDE) for R. There are two free versions *Rstudio Desktop* and *Rstudio Server*. You can download it from <https://www.rstudio.com/products/rstudio/download/>.
+
+## 1.1 Feature of R
+
+The following are the important features of R:
+
+$\bullet$ R is a well-developed, simple and effective programming language which includes conditionals, loops, user defined recursive functions and input and output facilities.
+
+$\bullet$ R has an effective data handling and storage facility,
+
+$\bullet$ R provides a suite of operators for calculations on arrays, lists, vectors and matrices.
+
+$\bullet$ R provides a large, coherent and integrated collection of tools for data analysis.
+
+$\bullet$ R provides graphical facilities for data analysis and display either directly at the computer or printing at the papers.
+
+# Now we start writing code!
+
+$\bullet$ Create R script and R Markdown in RStudio
+
+File -\> New File -\> R Script, the short cut key is Ctrl+Shift+N.
+
+File -\> New File -\> R Markdown.
+
+Download provided *.rmd* and *style.css* files from ispace, put them in the same folder, and load *.rmd* in RStudio.
+
+$\bullet$ RMarkdown tips:
+
+1.  How to generate html from .Rmd? Ans: Knit to HTML.
+
+2.  You can quickly insert chunks like these into your file with
+
+-   the keyboard shortcut Ctrl + Alt + I (OS X: Cmd + Option + I)
+-   the Add Chunk command in the editor toolbar
+-   or by typing the chunk delimiters \`\`\`{r} and \`\`\`.
+
+# **2. Basic Syntax**
+
+As a convention, we will start learning R programming by writing a “Hello, World!” program.
+
+```{r}
+mystring <- "hello world"
+print(mystring)
+```
+
+Save the above code in a file test.R and execute it at Linux command prompt as given below. Even if you are using Windows or other system, syntax will remain same.
+
+Specifically, we first make sure the current path in the **Terminal** window is the path of test.R. Then type in the following command prompt in the **Terminal** window.
+
+### 2.1 Comments
+
+Comments are like helping text in your R program and they are ignored by the interpreter while executing your actual program. Single comment is written using \# in the beginning of the statement as follows −
+
+```{r}
+# Comments: Add two numbers
+print(7 + pi)
+```
+
+## **2.2 Navigating directories**
+
+∙ getwd(): Returns the current working directory.
+
+∙ setwd(): Set the working directory.
+
+∙ dir(): Return the list of the directory.
+
+∙ sessionInfo(): Return the session of the windows.
+
+∙ date(): Return the current date.
+
+```{r}
+# Show directory, session information, date
+getwd()
+dir()
+sessionInfo()
+date()
+```
+
+### **2.3 Installing packages**
+
+```{cmd}
+# install packages
+install.packages("rmarkdown")
+install.packages("knitr")
+install.packages("lattice")
+install.packages("ggplot2")
+# load the required package
+library(lattice)
+# Use help() function for on-line help
+help(print)
+```
+
+## **2.4 Clearing the console and environment**
+
+We clear console in R and RStudio, In some cases when you run the codes using “source” and “source with echo” your console will become messy. And it is needed to clear the console. So let’s now look at how to clear the console. The console can be cleared using the shortcut key ctrl + L.
+
+```{r}
+# Define a variable a=1
+a <- 1
+# Remove a variable a
+rm(a)
+# Remove all the variables in the current environment
+rm(list=ls())
+```
+
+## **2.5 Assignment commands**
+
+In R, the assignment can be denoted in three ways:
+
+1.  = (Simple Assignment)
+
+2.  \<- (Leftward Assignment)
+
+3.  -\> (Rightward Assignment)
+
+This is an example:
+
+```{r}
+# Assignment values to three variables in three ways
+var1 = "Simple Assignment"
+var2 <- "Leftward Assignment"
+"Rightward Assignment" -> var3
+
+# print the three variables
+print(var1)
+print(var2)
+print(var3)
+```
+
+# **3. Data Types**
+
+The variables are assigned with R-Objects and the data type of the R-object becomes the data type of the variable. There are many types of R-objects.
+
+-   Vectors
+
+-   Lists
+
+-   Matrices
+
+-   Arrays
+
+-   Factors
+
+-   Data Frames
+
+The simplest of these objects is the vector object and there are six data types of these atomic vectors. The other R-Objects are built upon the atomic vectors.
+
+```{r}
+v <- TRUE 
+print(class(v))
+```
+
+```{r}
+v <- 23.5
+print(class(v))
+```
+
+```{r}
+v <- 2L
+print(class(v))
+```
+
+```{r}
+v <- 2+5i
+print(class(v))
+
+```
+
+```{r}
+v <- "TRUE"
+print(class(v))
+```
+
+```{r}
+v <- charToRaw("Hello")
+print(class(v))
+```
+
+## **3.1 Vectors**
+
+Atomic vector.
+
+```{r}
+# Atomic vector of type double.
+print(12.5)
+```
+
+Multiple Elements Vector.
+
+1.  Using colon operator with numeric data.
+
+2.  Using sequence (Seq.) operator
+
+3.  Using the c() function
+
+```{r}
+# 1. Using colon operator
+# Creating a sequence from 5 to 13.
+v <- 5:13
+print(v)
+```
+
+```{r}
+# Creating a sequence from 6.6 to 12.6.
+v <- 6.6:12.6
+print(v)
+
+```
+
+```{r}
+# If the final element specified does not belong to the sequence then it is discarded.]
+v <- 3.8:11.4
+print(v)
+```
+
+```{r}
+# 2. Using sequence (Seq.) operator
+# Create vector with elements from 5 to 9 incrementing by 0.4.
+print(seq(5, 9, by = 0.4))
+```
+
+```{r}
+# 3. Using the c() function
+# The logical and numeric values are converted to characters.
+s <- c('apple','red',5,TRUE)
+print(s)
+```
+
+```{r}
+print(class(s[3]))
+```
+
+Accessing Vector Elements
+
+In class exercise
+
+```{r}
+# Accessing vector elements using position.
+fruits <- c("banana", "apple", "orange", "mango", "lemon")
+# Q1: Find out how many items a vector has.
+length(fruits)
+# Q2: Access the first and third item (banana and orange)
+fruits[c(1, 3)]
+# Q3: Access all items except for the first and last items.
+fruits[c(-1, -length(fruits))]
+# Q4: Change "mango" to "pear". Suppose you don't know the index of mango.
+fruits[fruits == "mango"] <- "pear"
+print(fruits)
+```
+
+Vector Element Recycling
+
+```{r}
+v1 <- c(3,8,4,5,0,11)
+v2 <- c(4,11)
+# V2 becomes c(4,11,4,11,4,11)
+
+add.result <- v1+v2
+print(add.result)
+```
