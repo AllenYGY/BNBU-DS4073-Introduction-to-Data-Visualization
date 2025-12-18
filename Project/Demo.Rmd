@@ -1,0 +1,756 @@
+---
+title: "Beijing Air Quality Comprehensive Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: [""]
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(flexdashboard)
+library(tidyverse)
+library(lubridate)
+library(highcharter)
+library(plotly)
+library(leaflet)
+library(geosphere)
+library(GGally)
+library(scales)
+library(DT)
+```
+
+# Introduction {.sidebar}
+
+## Setup Instructions
+
+Please install required packages if you haven't:
+
+```{r eval=FALSE}
+pkgs <- c("flexdashboard", "tidyverse", "lubridate", "highcharter", 
+          "plotly", "leaflet", "geosphere", "GGally", "scales", "DT")
+install.packages(pkgs)
+```
+
+## About This Dashboard
+
+This comprehensive dashboard integrates three analytical perspectives:
+
+1.  **Time Series Analysis**: Trends, seasonality, and temporal patterns
+2.  **Spatial Analysis**: Geographic distribution and regional variations
+3.  **Wind Mechanisms**: Wind direction impacts on air quality
+
+**Data**: Beijing air quality monitoring data (2013-2017)
+
+**Navigate**: Use the top menu to explore different analytical pages
+
+# Overview & Trends
+
+```{r data_prep}
+# 读取数据
+aq <- read_csv("beijing_air_processed.csv", show_col_types = FALSE)
+
+# 数据预处理
+aq <- aq %>%
+  mutate(
+    date = as_date(datetime),
+    ym = floor_date(datetime, "month"),
+    week = isoweek(datetime),
+    season = factor(season, levels = c("Spring", "Summer", "Autumn", "Winter"), ordered = TRUE),
+    station = as.factor(station),
+    region = as.factor(region),
+    season_year = as.integer(season_year),
+    wd = factor(wd, levels = c("N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW","CV"))
+  )
+
+# 基础统计
+daily_pm25 <- aq %>%
+  group_by(date) %>%
+  summarise(pm25_mean = mean(pm2_5, na.rm = TRUE))
+
+pm_stats <- daily_pm25 %>%
+  summarise(
+    total_days = n(),
+    exceed_days = sum(pm25_mean > 75, na.rm = TRUE),
+    exceed_rate = exceed_days / total_days,
+    pm25_mean = mean(pm25_mean, na.rm = TRUE),
+    pm25_min = min(pm25_mean, na.rm = TRUE),
+    pm25_max = max(pm25_mean, na.rm = TRUE)
+  )
+```
+
+## Row {data-height="200"}
+
+### Min PM2.5
+
+```{r}
+valueBox(round(pm_stats$pm25_min, 2), color = "aqua", icon = "fa-cloud")
+```
+
+### Max PM2.5
+
+```{r}
+valueBox(round(pm_stats$pm25_max, 2), color = "warning", icon = "fa-cloud")
+```
+
+### Average PM2.5
+
+```{r}
+valueBox(round(pm_stats$pm25_mean, 2), color = "yellow", icon = "fa-bar-chart")
+```
+
+### Total Days
+
+```{r}
+valueBox(pm_stats$total_days, icon = "fa-line-chart", color = "aqua")
+```
+
+### Exceed Days (≥75)
+
+```{r}
+valueBox(pm_stats$exceed_days, icon = "fa-times", color = "warning")
+```
+
+### Exceed Rate (≥75)
+
+```{r}
+valueBox(scales::percent(pm_stats$exceed_rate, accuracy = 0.1), icon = "fa-times", color = "warning")
+```
+
+## Row
+
+### Annual PM2.5 Trend
+
+```{r}
+annual_pm25 <- aq %>%
+  group_by(year) %>%
+  summarise(pm25_mean = mean(pm2_5, na.rm = TRUE))
+
+highchart() %>%
+  hc_title(text = "Annual PM2.5 Trend") %>%
+  hc_xAxis(categories = annual_pm25$year) %>%
+  hc_yAxis(title = list(text = "Average PM2.5 (µg/m³)")) %>%
+  hc_add_series(name = "PM2.5", data = round(annual_pm25$pm25_mean, 2), type = "line")
+```
+
+### Seasonal PM2.5 Variation
+
+```{r}
+season_pm25 <- aq %>%
+  group_by(season_year, season) %>%
+  summarise(pm25_mean = mean(pm2_5, na.rm = TRUE), .groups = "drop")
+
+highchart() %>%
+  hc_title(text = "Seasonal PM2.5 Trend") %>%
+  hc_xAxis(categories = paste(season_pm25$season_year, season_pm25$season, sep = "-")) %>%
+  hc_yAxis(title = list(text = "Average PM2.5 (µg/m³)")) %>%
+  hc_add_series(name = "PM2.5", data = round(season_pm25$pm25_mean, 2), type = "line")
+```
+
+### Weekly Cycle
+
+```{r}
+aq_weekday <- aq %>%
+  mutate(weekday = wday(date, label = TRUE, week_start = 1, locale = "C")) %>%
+  group_by(weekday) %>%
+  summarise(mean_pm25 = mean(pm2_5, na.rm = TRUE))
+
+highchart() %>%
+  hc_title(text = "Weekly PM2.5 Cycle") %>%
+  hc_xAxis(categories = aq_weekday$weekday, title = list(text = "Weekday")) %>%
+  hc_yAxis(title = list(text = "Average PM2.5 (µg/m³)")) %>%
+  hc_add_series(type = "line", data = aq_weekday$mean_pm25, name = "PM2.5") %>%
+  hc_tooltip(pointFormat = "Day: {point.category}<br>PM2.5: {point.y} µg/m³")
+```
+
+## Row
+
+### Calendar Heatmap (2015)
+
+```{r}
+calendar_data <- daily_pm25 %>%
+  mutate(
+    year = year(date),
+    month = month(date, label = TRUE, abbr = TRUE),
+    day = day(date),
+    wday = wday(date, week_start = 1),
+    week = isoweek(date),
+    pm25_mean = round(pm25_mean, 1)
+  )
+
+target_year <- 2015
+df <- calendar_data %>% filter(year == target_year)
+min_week <- min(df$week)
+df <- df %>% mutate(week = week - min_week + 1)
+
+data_list <- list_parse2(df %>% transmute(x = week, y = wday, value = pm25_mean, name = as.character(date)))
+
+highchart() %>%
+  hc_title(text = paste("Calendar Heatmap of PM2.5 -", target_year)) %>%
+  hc_xAxis(title = list(text = "Week of Year"), tickInterval = 1) %>%
+  hc_yAxis(title = list(text = "Weekday"), categories = c("Mon","Tue","Wed","Thu","Fri","Sat","Sun"), reversed = TRUE) %>%
+  hc_add_series(type = "heatmap", data = data_list, name = "PM2.5", borderWidth = 0.5, dataLabels = list(enabled = FALSE)) %>%
+  hc_colorAxis(min = min(df$pm25_mean), max = max(df$pm25_mean), stops = color_stops(n = 7, colors = c("#f7fbff","#deebf7","#9ecae1","#6baed6","#3182bd","#08519c"))) %>%
+  hc_tooltip(formatter = JS("function() { return '<b>' + this.point.name + '</b><br>PM2.5: ' + this.point.value; }"))
+```
+
+### Diurnal Cycle (24-hour)
+
+```{r}
+hour_pm25 <- aq %>%
+  group_by(hour) %>%
+  summarise(mean_pm25 = mean(pm2_5, na.rm = TRUE))
+
+highchart() %>%
+  hc_title(text = "Diurnal Cycle of PM2.5") %>%
+  hc_xAxis(categories = 0:23, title = list(text = "Hour of Day")) %>%
+  hc_yAxis(title = list(text = "PM2.5")) %>%
+  hc_add_series(data = hour_pm25$mean_pm25, name = "PM2.5", type = "line") %>%
+  hc_plotOptions(series = list(marker = list(enabled = TRUE))) %>%
+  hc_tooltip(pointFormat = "Hour: {point.category}<br>PM2.5: {point.y}")
+```
+
+## Row
+
+### Yearly Exceed Rate
+
+```{r}
+daily_pm25_exceed <- daily_pm25 %>%
+  mutate(year = year(date), exceed = pm25_mean > 75)
+
+yearly_exceed <- daily_pm25_exceed %>%
+  group_by(year) %>%
+  summarise(
+    total_days = n(),
+    exceed_days = sum(exceed, na.rm = TRUE),
+    exceed_rate = exceed_days / total_days
+  )
+
+exceed_rate_pct <- round(yearly_exceed$exceed_rate * 100, 1)
+
+highchart() %>%
+  hc_title(text = "Annual PM2.5 Exceedance Rate") %>%
+  hc_xAxis(categories = yearly_exceed$year, title = list(text = "Year")) %>%
+  hc_yAxis(title = list(text = "Exceedance Rate (%)"), labels = list(format = "{value}%")) %>%
+  hc_colorAxis(min = min(exceed_rate_pct), max = max(exceed_rate_pct), stops = color_stops(colors = c("lightyellow", "orange", "red", "darkred"))) %>%
+  hc_add_series(type = "column", name = "Exceedance Rate", data = exceed_rate_pct, colorByPoint = TRUE) %>%
+  hc_tooltip(pointFormat = "Exceedance Rate: {point.y}%") %>%
+  hc_plotOptions(column = list(dataLabels = list(enabled = TRUE, format = "{y}%")))
+```
+
+### Monthly Exceed Rate
+
+```{r}
+daily_pm25_month <- daily_pm25 %>%
+  mutate(month = month(date), exceed = pm25_mean > 75)
+
+monthly_exceed <- daily_pm25_month %>%
+  group_by(month) %>%
+  summarise(
+    total_days = n(),
+    exceed_days = sum(exceed, na.rm = TRUE),
+    exceed_rate = exceed_days / total_days
+  )
+
+exceed_rate_pct_m <- round(monthly_exceed$exceed_rate * 100, 1)
+
+highchart() %>%
+  hc_title(text = "Monthly PM2.5 Exceedance Rate") %>%
+  hc_xAxis(categories = month.abb, title = list(text = "Month")) %>%
+  hc_yAxis(title = list(text = "Exceedance Rate"), labels = list(format = "{value}%")) %>%
+  hc_colorAxis(min = min(exceed_rate_pct_m), max = max(exceed_rate_pct_m), stops = color_stops(colors = c("lightyellow", "orange", "red", "darkred"))) %>%
+  hc_add_series(type = "column", name = "Exceedance Rate", data = exceed_rate_pct_m, colorByPoint = TRUE) %>%
+  hc_tooltip(pointFormat = "Exceedance Rate: {point.y}%") %>%
+  hc_plotOptions(column = list(dataLabels = list(enabled = TRUE, format = "{y}%")))
+```
+
+# Spatial Distribution
+
+```{r spatial_prep}
+# 读取站点信息
+stations <- read_csv("stations.csv", show_col_types = FALSE)
+
+# 合并经纬度
+df_spatial <- aq %>%
+  left_join(stations, by = "station") %>%
+  mutate(region = region.y)
+
+# 站点统计
+station_summary <- df_spatial %>%
+  group_by(station, region, lat, lon) %>% 
+  summarise(pm25_mean = mean(pm2_5, na.rm = TRUE), .groups = "drop")
+
+# 区域颜色
+region_colors <- c("North" = "blue", "South" = "red", "Central" = "orange")
+```
+
+## Row {data-height="60%"}
+
+### Interactive Map: Mean PM2.5 by Station
+
+```{r}
+pal <- colorNumeric(palette = c("green", "yellow", "red"), domain = station_summary$pm25_mean)
+radius_fun <- function(x) scales::rescale(x, to = c(5, 20))
+
+# 区域 Polygon
+regions_poly <- df_spatial %>%
+  distinct(region, lat, lon) %>%
+  group_by(region) %>%
+  summarise(poly = list({
+    pts <- cbind(lon, lat)
+    pts <- pts[complete.cases(pts), ]
+    hull <- pts[chull(pts), ]
+    hull
+  }), .groups = "drop")
+
+map <- leaflet(station_summary) %>% 
+  addProviderTiles(providers$CartoDB.Positron)
+
+for (i in 1:nrow(regions_poly)) {
+  map <- map %>% addPolygons(
+    lng = regions_poly$poly[[i]][,1],
+    lat = regions_poly$poly[[i]][,2],
+    color = region_colors[regions_poly$region[i]],
+    weight = 1,
+    fillColor = region_colors[regions_poly$region[i]],
+    fillOpacity = 0.15
+  )
+}
+
+map %>%
+  addCircleMarkers(
+    lng = ~lon, lat = ~lat,
+    radius = ~radius_fun(pm25_mean),
+    color = ~pal(pm25_mean),
+    fillColor = ~pal(pm25_mean),
+    fillOpacity = 0.9,
+    stroke = FALSE,
+    label = ~paste0("<b>", station, "</b><br>", "Region: ", region, "<br>", "Mean PM2.5: ", round(pm25_mean, 1)),
+    labelOptions = labelOptions(direction = "auto", style = list("font-size" = "13px", "background" = "white"))
+  ) %>%
+  addLegend(pal = pal, values = ~pm25_mean, title = "Mean PM2.5", position = "bottomright")
+```
+
+## Row {data-height="40%"}
+
+### PM2.5 Distribution by Region
+
+```{r}
+df_spatial %>%
+  ggplot(aes(x = region, y = pm2_5, fill = region)) +
+  geom_boxplot(outlier.size = 1.2, alpha = 0.75) +
+  scale_fill_manual(values = region_colors) +
+  theme_minimal(base_size = 13) +
+  labs(title = "PM2.5 Distribution Across Regions", y = "PM2.5", x = "Region")
+```
+
+### Top 10 Most Polluted Stations
+
+```{r}
+DT::datatable(
+  station_summary %>% arrange(desc(pm25_mean)) %>% head(10),
+  options = list(pageLength = 5, searching = FALSE),
+  rownames = FALSE
+)
+```
+
+### Average PM2.5 by Region
+
+```{r}
+region_avg <- station_summary %>%
+  group_by(region) %>%
+  summarise(avg_pm25 = mean(pm25_mean))
+
+ggplot(region_avg, aes(x = region, y = avg_pm25, fill = region)) +
+  geom_col(alpha = 0.8) +
+  scale_fill_manual(values = region_colors) +
+  theme_minimal(base_size = 13) +
+  labs(title = "Average PM2.5 by Region", y = "Average PM2.5", x = "Region")
+```
+
+# Meteorological Factors
+
+```{r meteo_prep}
+# 准备气象数据
+meteo_df <- df_spatial %>%
+  dplyr::select(pm2_5, temp, dewp, pres, region, station, lat, lon) %>%
+  stats::na.omit()
+
+# 抽样以提高性能
+set.seed(123)
+n_sample <- min(3000, nrow(meteo_df))
+meteo_sample <- meteo_df[sample(seq_len(nrow(meteo_df)), n_sample), ]
+meteo_sample$station <- factor(meteo_sample$station)
+```
+
+## Row {.tabset}
+
+### PM2.5 vs Temperature
+
+```{r}
+plotly::plot_ly(
+  data = meteo_sample,
+  x = ~temp, y = ~pm2_5,
+  type = "scatter", mode = "markers",
+  color = ~station,
+  text = ~paste("Station:", station, "<br>Region:", region, "<br>Temp:", round(temp, 1), "°C", "<br>PM2.5:", round(pm2_5, 1)),
+  hoverinfo = "text",
+  marker = list(size = 5, opacity = 0.7)
+) %>%
+  layout(
+    title = "PM2.5 vs Temperature",
+    xaxis = list(title = "Temperature (°C)"),
+    yaxis = list(title = "PM2.5"),
+    legend = list(orientation = "h", x = 0, y = -0.2)
+  )
+```
+
+### PM2.5 vs Dew Point
+
+```{r}
+plotly::plot_ly(
+  data = meteo_sample,
+  x = ~dewp, y = ~pm2_5,
+  type = "scatter", mode = "markers",
+  color = ~station,
+  text = ~paste("Station:", station, "<br>Region:", region, "<br>Dew Point:", round(dewp, 1), "°C", "<br>PM2.5:", round(pm2_5, 1)),
+  hoverinfo = "text",
+  marker = list(size = 5, opacity = 0.7)
+) %>%
+  layout(
+    title = "PM2.5 vs Dew Point",
+    xaxis = list(title = "Dew Point (°C)"),
+    yaxis = list(title = "PM2.5"),
+    legend = list(orientation = "h", x = 0, y = -0.2)
+  )
+```
+
+### PM2.5 vs Pressure
+
+```{r}
+plotly::plot_ly(
+  data = meteo_sample,
+  x = ~pres, y = ~pm2_5,
+  type = "scatter", mode = "markers",
+  color = ~station,
+  text = ~paste("Station:", station, "<br>Region:", region, "<br>Pressure:", round(pres, 1), " hPa", "<br>PM2.5:", round(pm2_5, 1)),
+  hoverinfo = "text",
+  marker = list(size = 5, opacity = 0.7)
+) %>%
+  layout(
+    title = "PM2.5 vs Pressure",
+    xaxis = list(title = "Pressure (hPa)"),
+    yaxis = list(title = "PM2.5"),
+    legend = list(orientation = "h", x = 0, y = -0.2)
+  )
+```
+
+# Correlation Analysis
+
+## Row {data-height="35%"}
+
+### Correlation Heatmap
+
+```{r}
+cor_mat <- cor(meteo_df[, c("pm2_5", "temp", "dewp", "pres")], use = "complete.obs")
+cor_df <- as.data.frame(as.table(cor_mat))
+names(cor_df) <- c("Var1", "Var2", "Correlation")
+
+p_cor <- ggplot(cor_df, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.2f", Correlation)), size = 3) +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", limits = c(-1, 1)) +
+  labs(title = "Correlation between PM2.5 and Meteorological Factors", x = NULL, y = NULL, fill = "r") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1), panel.grid = element_blank())
+
+plotly::ggplotly(p_cor, tooltip = c("x", "y", "fill"))
+```
+
+## Row {data-height="65%"}
+
+### Station-wise Correlation Map
+
+```{r}
+station_meteo_cor <- df_spatial %>%
+  dplyr::group_by(station) %>%
+  dplyr::summarise(
+    cor_temp = cor(pm2_5, temp, use = "complete.obs"),
+    cor_dewp = cor(pm2_5, dewp, use = "complete.obs"),
+    cor_pres = cor(pm2_5, pres, use = "complete.obs"),
+    n = dplyr::n(),
+    .groups = "drop"
+  )
+
+station_map <- station_summary %>%
+  dplyr::select(station, region, lat, lon) %>%
+  dplyr::distinct() %>%
+  dplyr::left_join(station_meteo_cor, by = "station")
+
+pal_cor <- colorNumeric(palette = "RdBu", domain = station_map$cor_temp, reverse = TRUE)
+
+leaflet(station_map) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    lng = ~lon, lat = ~lat,
+    radius = 7,
+    color = ~pal_cor(cor_temp),
+    fillColor = ~pal_cor(cor_temp),
+    fillOpacity = 0.9,
+    stroke = FALSE,
+    popup = ~paste0(
+      "<b>", station, "</b><br/>",
+      "Corr(PM2.5, Temp) = ", sprintf("%.2f", cor_temp), "<br/>",
+      "Corr(PM2.5, Dewp) = ", sprintf("%.2f", cor_dewp), "<br/>",
+      "Corr(PM2.5, Pres) = ", sprintf("%.2f", cor_pres), "<br/>",
+      "N = ", n
+    )
+  ) %>%
+  addLegend("bottomright", pal = pal_cor, values = ~cor_temp, title = "Corr(PM2.5, Temp)", labFormat = labelFormat(digits = 2))
+```
+
+# AQI Analysis
+
+```{r aqi_prep}
+# AQI分级
+beijing_aqi <- df_spatial %>%
+  mutate(
+    datetime = as.POSIXct(datetime, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    date = as.Date(datetime)
+  ) %>%
+  filter(season_year >= 2013, season_year <= 2016)
+
+daily_pm_aqi <- beijing_aqi %>%
+  group_by(season_year, date) %>%
+  summarise(pm2_5 = mean(pm2_5, na.rm = TRUE), .groups = "drop")
+
+daily_pm_aqi <- daily_pm_aqi %>%
+  mutate(
+    aqi_level = case_when(
+      pm2_5 <= 35  ~ "Level 1 (Good)",
+      pm2_5 <= 75  ~ "Level 2 (Moderate)",
+      pm2_5 <= 115 ~ "Level 3 (Unhealthy-Sensitive)",
+      pm2_5 <= 150 ~ "Level 4 (Unhealthy)",
+      pm2_5 <= 250 ~ "Level 5 (Very Unhealthy)",
+      pm2_5 > 250  ~ "Level 6 (Hazardous)",
+      TRUE ~ NA_character_
+    ),
+    aqi_level = factor(aqi_level, levels = c("Level 1 (Good)", "Level 2 (Moderate)", "Level 3 (Unhealthy-Sensitive)", "Level 4 (Unhealthy)", "Level 5 (Very Unhealthy)", "Level 6 (Hazardous)"))
+  )
+
+aqi_prop <- daily_pm_aqi %>%
+  filter(!is.na(aqi_level)) %>%
+  count(season_year, aqi_level) %>%
+  group_by(season_year) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+aqi_colors <- c(
+  "Level 1 (Good)" = "#2ECC71",
+  "Level 2 (Moderate)" = "#F1C40F",
+  "Level 3 (Unhealthy-Sensitive)" = "#E67E22",
+  "Level 4 (Unhealthy)" = "#E74C3C",
+  "Level 5 (Very Unhealthy)" = "#8E44AD",
+  "Level 6 (Hazardous)" = "#7F0000"
+)
+
+waffle_df <- aqi_prop %>%
+  mutate(n_cells = round(prop * 100)) %>%
+  filter(n_cells > 0) %>%
+  tidyr::uncount(n_cells) %>%
+  group_by(season_year) %>%
+  mutate(
+    cell_index = row_number() - 1,
+    x = cell_index %% 10,
+    y = cell_index %/% 10
+  ) %>%
+  ungroup()
+```
+
+## Row {data-height="35%"}
+
+### AQI Severity Distribution by Seasonal Year
+
+```{r}
+p_stack <- ggplot(aqi_prop, aes(x = factor(season_year), y = prop, fill = aqi_level)) +
+  geom_col(width = 0.7, colour = "white") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_fill_manual(values = aqi_colors, name = "AQI level") +
+  labs(
+    title = "AQI Severity Distribution by Seasonal Year",
+    subtitle = "Daily mean PM2.5 aggregated over all stations (Mar–Feb)",
+    x = "Seasonal year",
+    y = "Proportion of days"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+plotly::ggplotly(p_stack)
+```
+
+## Row {data-height="65%"}
+
+### AQI Severity Waffle Chart
+
+```{r}
+ggplot(waffle_df, aes(x = x, y = y, fill = aqi_level)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  scale_y_reverse() +
+  coord_equal() +
+  scale_fill_manual(values = aqi_colors, name = "AQI level") +
+  facet_wrap(~ season_year, nrow = 1) +
+  labs(
+    title = "AQI Severity Waffle Chart by Seasonal Year",
+    subtitle = "Each grid ≈ 1% of days in the seasonal year"
+  ) +
+  theme_void() +
+  theme(
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.position = "right",
+    legend.text = element_text(size = 10),
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11)
+  )
+```
+
+# Wind Patterns
+
+```{r wind_prep}
+wd_levels_full <- c("N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW","CV")
+aqi_palette <- c("darkgreen", "gold", "orange", "red", "purple", "brown")
+
+wd_full_names <- c(
+  N = "North", NNE = "North-Northeast", NE = "Northeast", ENE = "East-Northeast",
+  E = "East", ESE = "East-Southeast", SE = "Southeast", SSE = "South-Southeast",
+  S = "South", SSW = "South-Southwest", SW = "Southwest", WSW = "West-Southwest",
+  W = "West", WNW = "West-Northwest", NW = "Northwest", NNW = "North-Northwest"
+)
+
+# 准备风向数据
+wind_data <- df_spatial %>%
+  filter(!is.na(wd), !is.na(aqi_level)) %>%
+  mutate(wd = factor(wd, levels = wd_levels_full))
+```
+
+## Row {data-height="50%"}
+
+### Pollution Rose (All Periods)
+
+```{r}
+df_rose_all <- wind_data %>%
+  filter(wd != "CV") %>%
+  count(wd, aqi_level, name = "n") %>%
+  group_by(wd) %>%
+  mutate(freq = n / sum(n)) %>%
+  ungroup()
+
+if (nrow(df_rose_all) > 0) {
+  ggplot(df_rose_all, aes(x = wd, y = freq, fill = aqi_level)) +
+    geom_col(width = 1, color = "gray25") +
+    coord_polar(start = -pi/16) +
+    scale_y_continuous(labels = percent_format(accuracy = 1)) +
+    scale_fill_manual(values = aqi_palette, name = "AQI level") +
+    labs(title = "Pollution Rose (All Periods)", subtitle = "Frequency share within direction", x = "Wind direction", y = "Frequency") +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+}
+```
+
+### Winter vs Summer Comparison
+
+```{r}
+df_rose_ws <- wind_data %>%
+  filter(season %in% c("Winter", "Summer"), wd != "CV") %>%
+  count(season, wd, aqi_level, name = "n") %>%
+  group_by(season, wd) %>%
+  mutate(freq = n / sum(n)) %>%
+  ungroup()
+
+if (nrow(df_rose_ws) > 0) {
+  ggplot(df_rose_ws, aes(x = wd, y = freq, fill = aqi_level)) +
+    geom_col(width = 1, color = "gray25") +
+    coord_polar(start = -pi/16) +
+    scale_y_continuous(labels = percent_format(accuracy = 1)) +
+    scale_fill_manual(values = aqi_palette, name = "AQI level") +
+    labs(title = "Winter vs Summer: Pollution Rose", subtitle = "Frequency share within direction", x = "Wind direction", y = "Frequency") +
+    facet_wrap(~season, ncol = 2) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+}
+```
+
+## Row {data-height="50%"}
+
+### Mean PM2.5 by Wind Direction (colored by wind speed)
+
+```{r}
+df_pm_dir <- wind_data %>%
+  filter(wd != "CV", !is.na(pm2_5), !is.na(wspm)) %>%
+  group_by(wd) %>%
+  summarize(
+    mean_pm25 = mean(pm2_5, na.rm = TRUE),
+    mean_wspm = mean(wspm, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(dir_full = factor(recode(wd, !!!wd_full_names), levels = wd_full_names[wd_levels_full[wd_levels_full != "CV"]]))
+
+if (nrow(df_pm_dir) > 0) {
+  p_dir <- ggplot(df_pm_dir, aes(
+    x = dir_full,
+    y = mean_pm25,
+    fill = mean_wspm,
+    text = paste0("Direction: ", dir_full, "<br>", "Mean PM2.5: ", round(mean_pm25, 1), " µg/m³<br>", "Mean wind speed: ", round(mean_wspm, 2), " m/s")
+  )) +
+    geom_col(color = "gray25") +
+    scale_fill_viridis_c(name = "Wind speed (avg)") +
+    labs(title = "Mean PM2.5 by Wind Direction", subtitle = "Fill = mean wind speed (m/s)", x = "Wind direction", y = "Mean PM2.5 (µg/m³)") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right")
+  
+  ggplotly(p_dir, tooltip = "text")
+}
+```
+
+# Data Tables
+
+## Row
+
+### Raw Data Sample
+
+```{r}
+DT::datatable(
+  aq %>% select(datetime, station, region, pm2_5, temp, dewp, pres, wd, wspm, season) %>% head(100),
+  options = list(pageLength = 10, scrollX = TRUE),
+  filter = "top",
+  rownames = FALSE
+)
+```
+
+# Reference
+
+## Column
+
+### About flexdashboard
+
+This dashboard demonstrates the capabilities of **flexdashboard** for R:
+
+-   **Layout options**: rows, columns, pages, tabs, and sidebars
+-   **Interactive visualizations**: highcharter, plotly, leaflet
+-   **Responsive design**: adapts to different screen sizes
+-   **Easy publishing**: can be hosted on any web server
+
+### Resources
+
+-   [flexdashboard documentation](https://pkgs.rstudio.com/flexdashboard/)
+-   [Icon sets](https://pkgs.rstudio.com/flexdashboard/articles/using.html#icon-sets)
+-   [Themes](https://pkgs.rstudio.com/flexdashboard/articles/theme.html)
+
+### Data Source
+
+**Beijing Multi-Site Air-Quality Data**
+
+-   Period: 2013-2017
+-   Monitoring stations: 12 sites across Beijing
+-   Parameters: PM2.5, PM10, SO2, NO2, CO, O3, temperature, pressure, wind, etc.

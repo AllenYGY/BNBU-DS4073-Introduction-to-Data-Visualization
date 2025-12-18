@@ -1,0 +1,435 @@
+---
+title: 'Lab8: Multivariate Graphs'
+author: "Junya YANG 2230026188"
+date: "Nov 14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In the last two chapters, you looked at ways to display the distribution of a single variable, or the relationship between two variables. We are usually interested in understanding the relations among several variables. Multivariate graphs display the relationships among three or more variables. There are two common methods for accommodating multiple variables: `grouping` and `faceting`.
+
+# 1.1 Grouping
+
+In grouping, the values of the first two variables are mapped to the x and y axes. Then additional variables are mapped to other visual characteristics such as color, shape, size, line type, and transparency. Grouping allows you to plot the data for multiple groups in a single graph.
+
+Using the Salaries dataset, let’s display the relationship between yrs.since.phd and salary.
+
+```{r}
+library(ggplot2)
+data(Salaries, package="carData")
+
+# plot experience vs. salary
+ggplot(Salaries, 
+       aes(x = yrs.since.phd, y = salary)) +
+  geom_point() + 
+  labs(title = "Academic salary by years since degree")
+```
+
+Next, let’s include the rank and gender of professor, using color and shape of the points respectively.
+
+```{r}
+# plot experience vs. salary 
+# (color represents rank, shape represents sex)
+ggplot(Salaries, aes(x = yrs.since.phd, 
+                     y = salary, 
+                     color = rank, 
+                     shape = sex)) +
+  geom_point(size = 3, alpha = .6) +
+  labs(title = "Academic salary by rank, sex, and years since degree")
+```
+
+Notice the difference between specifying a constant value (such as `size = 3`) and a mapping of a variable to a visual characteristic (e.g., `color = rank`). Mappings are always placed within the `aes` function.
+
+$\color{red}{\text{In-class exercise}}$
+
+We’ll graph the relationship between years since Ph.D. and salary using the size of the points to indicate years of service. This is called a bubble plot.
+
+```{r}
+library(ggplot2)
+data(Salaries, package="carData")
+
+# plot experience vs. salary 
+# (color represents rank and size represents service)
+# write your answer here
+ggplot(Salaries, 
+       aes(x = yrs.since.phd, 
+           y = salary,
+           color = rank,
+           size = yrs.service)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Academic salary by rank, years since PhD, and years of service")
+```
+
+As a final example, let’s look at the yrs.since.phd vs salary and add sex using color and <font color="#dd0000">quadratic best fit</font><br /> lines.
+
+```{r}
+# plot experience vs. salary with 
+# fit lines (color represents sex)
+ggplot(Salaries, 
+       aes(x = yrs.since.phd, 
+           y = salary, 
+           color = sex)) +
+  geom_point(alpha = .4, 
+             size=3) +
+  geom_smooth(se=FALSE, 
+              method="lm", 
+              formula=y~poly(x,2), 
+              linewidth = 1.5) +
+  labs(x = "Years Since Ph.D.",
+       title = "Academic Salary by Sex and Years Experience",
+       subtitle = "9-month salary for 2008-2009",
+       y = "",
+       color = "Sex") +
+  scale_y_continuous(label = scales::dollar) +
+  scale_color_brewer(palette="Set1") +
+  theme_minimal()
+```
+
+We use a polynomial regression to find a better curve to fit the data. The way to go is to use lm() and introduce the function poly(predictor, n) to set the order of the polynomial. Here predictor is the predictor variable, and n is the order of the polynomial. Assuming that we wish to get a second order polynomial, we can run the following code: `formula=y~poly(x,2)`.
+
+Now let's see what values the property "palette" of the function "scale_color_brewer" can be set to. Run `palette.pals()` to get available values for palette.
+
+# 1.2 Faceting
+
+Grouping allows you to plot multiple variables in a single graph, using visual characteristics such as color, shape, and size. In *faceting*, a graph consists of several separate plots or small multiples, one for each level of a third variable, or combination of two variables.
+
+Recall: We have learned how to separate plots using `facet_grid` in lab4.
+
+```{r}
+# plot salary histograms by rank
+ggplot(Salaries, aes(x = salary)) +
+  geom_histogram() +
+  facet_grid(rank~.) +
+  labs(title = "Salary histograms by rank")
+```
+
+While `facet_grid` shows the labels at the margins of the facet plot, `facet_wrap` creates a label for each plot panel. Whether facet_grid or facet_wrap is suited better for your data depends on your specific situation and quite often it's just a matter of taste.
+
+```{r}
+# plot salary histograms by rank
+ggplot(Salaries, aes(x = salary)) +
+  geom_histogram() +
+  facet_wrap(~rank, ncol = 1) +
+  labs(title = "Salary histograms by rank")
+```
+
+The differences between facet_wrap() and facet_grid() are illustrated in the figure below.
+
+```{r figure2, echo=FALSE, out.width = '60%'}
+knitr::include_graphics("position-facets.png")
+```
+
+The sketch illustrates the difference between the two faceting systems. `facet_grid()` (left) is fundamentally 2d, being made up of two independent components. `facet_wrap()` (right) is 1d, but wrapped into 2d to save space.
+
+Task: The `ncol` option controls the number of columns. Change the value of `ncol` in `facet_wrap` to see the difference.
+
+$\color{red}{\text{In-class exercise}}$
+
+Use two variables `sex` and `rank` to define the facets.
+
+```{r}
+# plot salary histograms by rank and sex
+# write your answer here
+ggplot(Salaries, aes(x = salary)) +
+  geom_histogram() +
+  facet_wrap(~ sex + rank) +
+  labs(title = "Salary histograms by sex and rank")
+
+```
+
+We can also combine grouping and faceting. In the following graph, we use color to represent `sex` and use small multiples for `discipline`.
+
+```{r}
+# plot salary by years of experience by sex and discipline
+ggplot(Salaries, 
+       aes(x=yrs.since.phd, y = salary, color=sex)) +
+  geom_point() +
+  geom_smooth(method="lm", 
+              se=FALSE) +
+  facet_wrap(~discipline, 
+             ncol = 1) 
+```
+
+Let’s make this last plot more attractive.
+
+```{r}
+# plot salary by years of experience by sex and discipline
+ggplot(Salaries, aes(x=yrs.since.phd, 
+                     y = salary, 
+                     color=sex)) +
+  geom_point(size = 2, 
+             alpha=.5) +
+  geom_smooth(method="lm", 
+              se=FALSE,
+              linewidth = 1.5) +
+  facet_wrap(~factor(discipline, 
+                     labels = c("Theoretical", "Applied")), 
+             ncol = 1) +
+  scale_y_continuous(labels = scales::dollar) + 
+  theme_minimal() +
+  scale_color_brewer(palette="Set1") +
+  labs(title = paste0("Relationship of salary and years ",
+                      "since degree by sex and discipline"),
+       subtitle = "9-month salary for 2008-2009",
+       color = "Gender",
+       x = "Years since Ph.D.",
+       y = "Academic Salary")
+```
+
+As a final example, we’ll shift to a new dataset and plot the change in life expectancy over time for countries in the “Americas”. The data comes from the `gapminder` dataset in the gapminder package. Each country appears in its own facet. The theme functions are used to simplify the background color, rotate the x-axis text, and make the font size smaller.
+
+```{r}
+# plot life expectancy by year separately 
+# for each country in the Americas
+data(gapminder, package = "gapminder")
+
+# Select the Americas data
+plotdata <- dplyr::filter(gapminder, 
+                          continent == "Americas")
+
+# plot life expectancy by year, for each country
+ggplot(plotdata, aes(x=year, y = lifeExp)) +
+  geom_line(color="grey") +
+  geom_point(color="blue") +
+  facet_wrap(~country) + 
+  theme_minimal(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1)) +
+  labs(title = "Changes in Life Expectancy",
+       x = "Year",
+       y = "Life Expectancy") 
+```
+
+## 1.3 Advanced multivariate graphs
+
+### 1.3.1 Scatterplot matrix with plot
+
+The native `plot` function does the job pretty well as long as you just need to display scatterplots.
+
+Figure out the x axis and y axis for each plot.
+
+```{r}
+# Data: numeric variables of the native mtcars dataset
+data <- mtcars[ ,c(1,3:6)]
+ 
+# Plot
+plot(data, pch=20, cex=1, col="#69b3a2")
+```
+
+The `pch` value is in range [0,25], corresponding to different plotting symbols. The `cex` decides the size of pch symbols.
+
+(<http://www.sthda.com/english/wiki/r-plot-pch-symbols-the-different-point-shapes-available-in-r> )
+
+### 1.3.2 Scatterplot matrix with ggparis
+
+How to make Scatterplot Matrix using `ggpairs()`?
+
+### Default scatterplot matrix
+
+The `ggpairs()` function in the `GGally` package allows to build a great scatterplot matrix.
+
+Scatterplots of each pair of numeric variable are drawn on the left part of the figure. Pearson correlation is displayed on the right. Variable distribution is available on the diagonal.
+
+```{r}
+# install.packages("GGally")
+library(GGally)
+
+
+data <- data.frame( var1 = 1:100 + rnorm(100,sd=20), 
+                    var2 = 1:100 + rnorm(100,sd=27), 
+                    var3 = rep(1, 100) + rnorm(100, sd = 1)) 
+data$var4 = data$var1 ** 2 
+data$var5 = -(data$var1 ** 2) 
+
+p <- ggpairs(data, title="correlogram with ggpairs()") 
+p
+```
+
+In statistics, the Pearson correlation coefficient (PCC) is a correlation coefficient that measures linear correlation between two sets of data. It is the ratio between the covariance of two variables and the product of their standard deviations; thus, it is essentially a normalized measurement of the covariance, such that the result always has a value between −1 and 1. As with covariance itself, the measure can only reflect a linear correlation of variables, and ignores many other types of relationships or correlations.
+
+As a simple example, one would expect the age and height of a sample of teenagers from a high school to have a Pearson correlation coefficient significantly greater than 0, but less than 1 (as 1 would represent an unrealistically perfect correlation).
+
+### Visualize correlation
+
+The `ggcorr()` function allows to visualize the correlation of each pair of variable as a square. Note that the method argument allows to pick the correlation type you desire.
+
+```{r}
+library(GGally)
+
+data <- data.frame( var1 = 1:100 + rnorm(100,sd=20), 
+                    var2 = 1:100 + rnorm(100,sd=27), 
+                    var3 = rep(1, 100) + rnorm(100, sd = 1)) 
+data$var4 = data$var1 ** 2 
+data$var5 = -(data$var1 ** 2) 
+
+ggcorr(data) 
+```
+
+### Split by group
+
+It is possible to use ggplot2 aesthetics on the chart, for instance to color each category.
+
+```{r}
+library(GGally)
+library(ggplot2)
+
+ggpairs(iris) 
+```
+
+$\color{red}{\text{In-class exercise}}$
+
+1.  Draw the plot in first row first column of ggpairs;
+2.  Draw the plot in second row first column of ggpairs.
+
+The plots should be exactly the same with the one in ggpairs.
+
+```{r}
+# write your code here to draw plot(1,1) of ggpairs;
+ggplot(iris, aes(x = Sepal.Length)) +
+  geom_density() +
+  labs(x = "Sepal.Length", y = "Density")
+# writr your code here to draw plot(2,1) of ggpairs;
+# plot(2, 1) – Sepal.Width vs Sepal.Length
+ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width)) +
+  geom_point() +
+  labs(x = "Sepal.Length", y = "Sepal.Width")
+```
+
+Uncomment following commands one by one for understanding the arguments of ggpairs.
+
+```{r}
+
+ggpairs(iris, mapping = aes(col=Species)) 
+
+ggpairs(iris, mapping = aes(col=Species),columns = 1:4) 
+
+ggpairs(iris, mapping = aes(col=Species),columns = 1:4,upper = list(continuous = "points")) 
+
+ggpairs(iris, mapping = aes(col=Species),columns = 1:4,upper = list(continuous = "points"),legend = 1) 
+
+ggpairs(iris, mapping = aes(col=Species),columns = 1:4,upper = list(continuous = "points"),legend = 2, progress = F) 
+
+```
+
+### Parallel coordinates
+
+`ggally` is a ggplot2 extension. It allows to build parallel coordinates charts thanks to the `ggparcoord()` function.
+
+The input dataset must be a data frame with several numeric variables, each being used as a vertical axis on the chart. Columns number of these variables are specified in the columns argument of the function.
+
+Note: here, a categorical variable is used to color lines, as specified in the `groupColumn` variable.
+
+```{r}
+# loading package
+library(GGally)
+
+# Data set is provided by R natively
+data <- iris
+
+# Plot
+ggparcoord(data, columns = 1:4, groupColumn = 5)
+
+# Why groupColumn = 5?
+# because the 5th column (Species) is the categorical variable used to color the lines by species group.
+```
+
+### Custom color, theme, general appearance
+
+This is pretty much the same chart as the previous one, except for the following customizations:
+
+-   color palette is improved thanks to the `viridis` package
+-   title is added with `title`
+-   dots are added with `showPoints`
+-   a bit of transparency is applied to lines with `alphaLines`
+
+```{r}
+# Loading packages
+# install.packages("viridis")
+library(GGally)
+library(viridis)
+
+# Data set is provided by R natively
+data <- iris
+
+# Plot
+ggparcoord(data,
+           columns = 1:4, 
+           groupColumn = 5, 
+           order = "anyClass",
+           showPoints = TRUE, 
+           title = "Parallel Coordinate Plot for the Iris Data",
+           alphaLines = 0.3) + 
+  scale_color_viridis(discrete=TRUE) +
+  theme_minimal()
+```
+
+### Highlight a group
+
+Data visualization aims to highlight a story in the data. Suppose you are interested in a specific group "setosa", you can highlight it.
+
+$\color{red}{\text{In-class exercise}}$
+
+Hint: use `scale_color_manual()` function. The highlight color of setosa is green "#69b3a2", the color of other two species is gray "#E8E8E8".
+
+```{r}
+# Libraries
+library(GGally)
+library(dplyr)
+
+# Data set is provided by R natively
+data <- iris
+
+data <- data %>% arrange(desc(Species))
+
+# Plot
+ggparcoord(data,
+           columns = 1:4, 
+           groupColumn = 5, 
+           order = "anyClass",
+           showPoints = TRUE, 
+           title = "",
+           alphaLines = 1) + 
+  theme(legend.position="top",
+        plot.title = element_text(size=10)) +
+  xlab("") 
+
+# modify above code to highlight the line of setosa in green
+# Plot with setosa highlighted
+ggparcoord(data,
+           columns = 1:4, 
+           groupColumn = 5, 
+           order = "anyClass",
+           showPoints = TRUE, 
+           title = "Highlighting Setosa",
+           alphaLines = 1) + 
+  scale_color_manual(values = c(
+    "setosa"     = "#69b3a2",  # highlighted group
+    "versicolor" = "#E8E8E8",
+    "virginica"  = "#E8E8E8"
+  )) +
+  theme(legend.position = "top",
+        plot.title = element_text(size = 10)) +
+  xlab("")
+
+```
+
+### Select colors
+
+```{r}
+library(scales)
+mycolor1 <- brewer_pal(type = "seq", palette = "Set2")(nlevels(iris$Species))
+mycolor2 <- viridis_pal()(9)
+show_col(mycolor1)
+
+
+show_col(viridis_pal()(9))
+
+show_col(hue_pal()(16))
+
+
+library(RColorBrewer)
+display.brewer.all()
+```

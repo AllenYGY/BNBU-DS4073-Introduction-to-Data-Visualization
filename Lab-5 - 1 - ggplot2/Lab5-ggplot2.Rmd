@@ -1,0 +1,330 @@
+---
+title: 'Lab5: ggplot2'
+author: "Junya YANG 2230026188"
+date: "Oct 22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1 ggplot2
+
+**ggplot2** package in R Programming Language also termed as Grammar of Graphics is a free, open-source, and easy-to-use visualization package widely used in R. It is the most powerful visualization package written by Hadley Wickham.
+
+It includes several layers on which it is governed. The layers are as follows:
+
+**Building Blocks of layers with the grammar of graphics**
+
+$\bullet$ Data: The element is the data set itself
+
+$\bullet$ Aesthetics: The data is to map onto the Aesthetics attributes such as x-axis, y-axis, color, fill, size, labels, alpha, shape, line width, line type
+
+$\bullet$ Geometrics: How our data being displayed using point, line, histogram, bar, boxplot
+
+$\bullet$ Facets: It displays the subset of the data using Columns and rows
+
+$\bullet$ Statistics: Binning, smoothing, descriptive, intermediate
+
+$\bullet$ Coordinates: the space between data and display using Cartesian, fixed, polar, limits
+
+$\bullet$ Themes: Non-data link
+
+## 1.1 Dataset we will use
+
+`mtcars` (motor trend car road test) comprise fuel consumption and 10 aspects of automobile design and performance for 32 automobiles and come pre-installed with dplyr package in R.
+
+```{r eval = FALSE}
+# Installing the package
+# install.packages("dplyr")
+# Loading package
+library(dplyr)
+```
+
+```{r}
+# Summary of dataset in package
+# m <- mtcars
+summary(mtcars)
+```
+
+## 1.2 Example of ggplot2 package
+
+We devise visualizations on mtcars dataset which includes 32 car brands and 11 attributes using ggplot2 layers.
+
+### 1.2.1 Data layer:
+
+In the data Layer we define the source of the information to be visualize, let’s use the mtcars dataset in the ggplot2 package.
+
+```{r}
+# Installing the package
+# install.packages("ggplot2")
+
+# Loading packages
+library(ggplot2)
+library(dplyr)
+
+# Data Layer
+ggplot(data = mtcars)
+```
+
+### 1.2.2 Aesthetic layer:
+
+Here we will display and map dataset into certain aesthetics. The mapping of the variables to visual properties of the graph. The mappings are placed within the `aes` function (where aes stands for aesthetics).
+
+```{r}
+# Aesthetic Layer
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg))
+```
+
+### 1.2.3 Geometric layer:
+
+In geometric layer control the essential elements, see how our data being displayed using point, line, histogram, bar, boxplot or others.
+
+```{r}
+# Geometric layer
+# Scatterplot: two variables
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg)) + 
+  geom_point()
+```
+
+A number of parameters (options) can be specified in a geom\_ function. Options for the geom_point function include `color`, `size`, and `alpha`. These control the point color, size, and transparency, respectively. Transparency ranges from 0 (completely transparent) to 1 (completely opaque). Adding a degree of transparency can help visualize overlapping points.
+
+```{r}
+# make points blue, larger, and semi-transparent
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg)) + 
+  geom_point(color = "cornflowerblue",
+             alpha = .7,
+             size = 3)
+```
+
+Use scatterplot to plot three variables:
+
+```{r}
+# Scatterplot: three variables
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg, col = disp)) + 
+  geom_point()
+```
+
+Geometric layer: Adding size, color, and shape to denote other attributes.
+
+```{r}
+# Adding size
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg, size = disp)) + 
+  geom_point()
+```
+
+$\color{red}{\text{In-class exercise}}$
+
+```{r}
+# Adding color and shape in aes function to denote cyl and am attributes. 
+# Hint: use factor(cyl) to count the distinct values contained in cyl attribute.
+# write your answer here
+
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, 
+                     y = mpg, 
+                     color = factor(cyl), 
+                     shape = factor(am))) +
+       geom_point()
+
+
+
+```
+
+Draw histogram plot of hp attribute.
+
+```{r}
+# Histogram plot
+ggplot(data = mtcars, aes(x = hp)) + 
+  geom_histogram(binwidth = 5)
+```
+
+### 1.2.4 Facet Layer:
+
+It is used to **split** the data up into subsets of the entire dataset and it allows the subsets to be visualized on the same plot. Here we separate rows according to transmission type and separate columns according to cylinders.
+
+```{r}
+# Facet Layer
+p <- ggplot(data = mtcars, 
+            mapping = aes(x = hp, y = mpg, shape = factor(cyl))) + geom_point()
+
+# Separate rows according to transmission type
+p + facet_grid(rows = vars(am)) 
+```
+
+```{r}
+# or
+p + facet_grid(am ~ .)
+```
+
+$\color{red}{\text{In-class exercise}}$
+
+Separate columns according to cylinders
+
+```{r}
+# Separate columns according to cylinders
+# write your answer here
+
+p + facet_grid(cols = vars(cyl)) 
+```
+
+```{r}
+#or
+# write your answer here
+p+facet_grid(. ~ cyl)
+
+```
+
+### 1.2.5 Statistics layer:
+
+In this layer, we transform our data using binning, smoothing, descriptive, intermediate.
+
+```{r}
+# Statistics layer
+# lm: Fitting Linear Models
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg)) +
+  geom_point() + 
+  stat_smooth(method = lm, formula = y~x, col = "red", cex = 1)
+```
+
+### 1.2.6 Coordinates layer:
+
+In these layers, data coordinates are mapped together to the mentioned plane of the graphic and we adjust the axis and changes the spacing of displayed data with control plot dimensions.
+
+```{r}
+# Coordinates layer: Control plot dimensions
+ggplot(data = mtcars, 
+       mapping = aes(x = wt, y = mpg)) + 
+  geom_point() + 
+  stat_smooth(method = lm, col = "red") + 
+  scale_y_continuous("mpg", limits = c(2, 35), 
+                     expand = c(0, 0)) + 
+  scale_x_continuous("wt", limits = c(0, 25), 
+                     expand = c(0, 0)) +
+  coord_equal()
+```
+
+Given following plot of attributes wt and hp:
+
+```{r}
+# loess: Local Polynomial Regression Fitting
+ggplot(data = mtcars, 
+       mapping = aes(x = wt, y = hp, col = am)) + 
+  geom_point() + 
+  geom_smooth(method = "loess", formula = 'y ~ x')
+```
+
+$\color{red}{\text{In-class exercise}}$
+
+Try plotting two fitted curves based on different values of am.
+
+```{r}
+# write your answer here
+ggplot(data = mtcars, 
+       mapping = aes(x = wt, y = hp, col = factor(am), group = am)) +
+  geom_point() +
+  geom_smooth(method = "loess", formula = 'y ~ x') +
+  labs(col = "Transmission (am)") +
+  theme_minimal()
+
+```
+
+Try using `coord_cartesian()` to zoom in the plot to better visualize the data with wt in the range [3,6]. Use the command `help("coord_cartesian")` to get help.
+
+```{r}
+# write your answer here
+ggplot(data = mtcars, 
+       mapping = aes(x = wt, y = hp, col = factor(am), group = am)) +
+  geom_point() +
+  geom_smooth(method = "loess", formula = 'y ~ x') +
+  labs(col = "Transmission (am)") +
+  coord_cartesian(xlim = c(3, 6)) + 
+  theme_minimal()
+
+```
+
+### 1.2.7 Theme Layer:
+
+This layer controls the finer points of display like the font size and background color properties.
+
+Example 1: Theme layer – `element_rect()` function
+
+```{r}
+# Theme layer
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg)) + 
+  geom_point() + 
+  facet_grid(. ~ cyl) +
+  theme(plot.background = element_rect(fill = "pink", 
+                                       colour = "black"))
+```
+
+Example 2:
+
+```{r}
+# Theme layer
+ggplot(data = mtcars, 
+       mapping = aes(x = hp, y = mpg)) + 
+  geom_point() + 
+  facet_grid(am ~ cyl) + 
+  theme_dark()
+```
+
+# 2 Summary
+
+**ggplot2** provides various types of visualizations. More parameters can be used included in the package as the package gives greater control over the visualizations of data. Many packages can integrate with the ggplot2 package to make the visualizations interactive and animated.
+
+# $\color{red}{\text{After-class exercise}}$
+
+Create the following ggplots based on the dataset `iris`.
+
+```{r}
+# Loading data
+data(iris)
+newdata <- iris
+str(newdata)
+```
+
+```{r}
+# Loading package
+library(ggplot2)
+
+# Creating a satterplot for two variables 'Sepal.Length' and 'Sepal.Width'
+# Write your anwser here
+ggplot(data = newdata, aes(x = Sepal.Length, y = Sepal.Width)) +
+  geom_point()
+```
+
+```{r}
+# Adding another variable 'Species' and indicate 'Species' using color 
+# Write your anwser here
+ggplot(data = newdata, aes(x = Sepal.Length, y = Sepal.Width, color = Species)) +
+  geom_point()
+```
+
+```{r}
+# Creating a satterplot for two variables 'Petal.Length' and 'Petal.Width'
+# Write your answer here
+ggplot(data = newdata, aes(x = Petal.Length, y = Petal.Width)) +
+  geom_point()
+```
+
+```{r}
+# Adding another variable 'Species', indicate 'Species' using shape, and set the background color lightblue.
+# Write your answer here
+ggplot(data = iris, aes(x = Petal.Length, y = Petal.Width, shape = Species)) +
+  geom_point(size = 3, alpha = 0.8) +  
+  theme_minimal() + 
+  theme(
+    plot.background = element_rect(fill = "lightblue", color = NA)
+  )
+
+
+```

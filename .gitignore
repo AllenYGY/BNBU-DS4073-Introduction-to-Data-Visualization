@@ -1,1 +1,10 @@
 .DS_Store
+.Rproj.user
+.RData
+.Rhistory
+*.html
+*.zip
+Project/PRSA_Data/*
+.Rhistory
+.vscode/
+.Rproj.user

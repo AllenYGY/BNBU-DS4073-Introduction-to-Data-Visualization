@@ -1,0 +1,164 @@
+---
+title: "Demo 3 - Wind Mechanisms"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: []
+    source_code: embed
+params:
+  data_file: "beijing_air_processed.csv"
+  season_year: "All"
+  season: "All"
+  region: NULL
+  station: NULL
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(plotly)
+
+wd_levels_full <- c("N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW","CV")
+aqi_palette <- c("darkgreen", "gold", "orange", "red", "purple", "brown")
+wd_full_names <- c(
+  N = "North", NNE = "North-Northeast", NE = "Northeast", ENE = "East-Northeast",
+  E = "East", ESE = "East-Southeast", SE = "Southeast", SSE = "South-Southeast",
+  S = "South", SSW = "South-Southwest", SW = "Southwest", WSW = "West-Southwest",
+  W = "West", WNW = "West-Northwest", NW = "Northwest", NNW = "North-Northwest"
+)
+```
+
+```{r data}
+data_file <- params$data_file
+stopifnot(file.exists(data_file))
+
+air_raw <- readr::read_csv(data_file, show_col_types = FALSE)
+
+region_levels <- sort(unique(air_raw$region))
+station_levels <- sort(unique(air_raw$station))
+
+region_param <- if (is.null(params$region)) region_levels else params$region
+station_param <- if (is.null(params$station)) station_levels else params$station
+
+filtered <- air_raw %>%
+  mutate(
+    season = factor(season, levels = c("Spring", "Summer", "Autumn", "Winter")),
+    region = factor(region, levels = region_levels),
+    wd = factor(wd, levels = wd_levels_full),
+    date = as_date(datetime)
+  ) %>%
+  { if (!identical(params$season_year, "All")) filter(., season_year == params$season_year) else . } %>%
+  { if (!identical(params$season, "All")) filter(., season == params$season) else . } %>%
+  filter(region %in% region_param, station %in% station_param)
+```
+
+# Wind patterns
+
+## Column {data-width="55"}
+
+### Pollution rose (all periods)
+
+```{r}
+df_rose_all <- filtered %>%
+  filter(!is.na(wd), wd != "CV", !is.na(aqi_level)) %>%
+  mutate(wd_full = factor(wd, levels = wd_levels_full)) %>%
+  count(wd_full, aqi_level, name = "n") %>%
+  group_by(wd_full) %>%
+  mutate(freq = n / sum(n)) %>%
+  ungroup()
+
+if (nrow(df_rose_all) == 0) {
+  ggplot() + theme_void()
+} else {
+  ggplot(df_rose_all, aes(x = wd_full, y = freq, fill = aqi_level)) +
+    geom_col(width = 1, color = "gray25") +
+    coord_polar(start = -pi/16) +
+    scale_y_continuous(labels = percent_format(accuracy = 1)) +
+    scale_fill_manual(values = aqi_palette, name = "AQI level") +
+    labs(
+      title = "Pollution rose (all periods)",
+      subtitle = "Frequency share within direction",
+      x = "Wind direction",
+      y = "Frequency"
+    ) +
+    theme(legend.position = "bottom")
+}
+```
+
+### Winter vs Summer comparison
+
+```{r}
+df_rose_ws <- filtered %>%
+  filter(season %in% c("Winter", "Summer")) %>%
+  filter(!is.na(wd), wd != "CV", !is.na(aqi_level)) %>%
+  mutate(wd_full = factor(wd, levels = wd_levels_full)) %>%
+  count(season, wd_full, aqi_level, name = "n") %>%
+  group_by(season, wd_full) %>%
+  mutate(freq = n / sum(n)) %>%
+  ungroup()
+
+if (nrow(df_rose_ws) == 0) {
+  ggplot() + theme_void()
+} else {
+  ggplot(df_rose_ws, aes(x = wd_full, y = freq, fill = aqi_level)) +
+    geom_col(width = 1, color = "gray25") +
+    coord_polar(start = -pi/16) +
+    scale_y_continuous(labels = percent_format(accuracy = 1)) +
+    scale_fill_manual(values = aqi_palette, name = "AQI level") +
+    labs(
+      title = "Winter vs Summer: Pollution rose",
+      subtitle = "Frequency share within direction",
+      x = "Wind direction",
+      y = "Frequency"
+    ) +
+    facet_wrap(~season, ncol = 2) +
+    theme(legend.position = "bottom")
+}
+```
+
+## Column {data-width="45"}
+
+### Mean PM2.5 by wind direction (fill = wind speed)
+
+```{r}
+df_pm_dir <- filtered %>%
+  filter(!is.na(wd), wd != "CV", !is.na(pm2_5), !is.na(wspm)) %>%
+  mutate(wd_full = factor(wd, levels = wd_levels_full)) %>%
+  group_by(wd_full) %>%
+  summarize(
+    mean_pm25 = mean(pm2_5, na.rm = TRUE),
+    mean_wspm = mean(wspm, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    dir_full = factor(recode(wd_full, !!!wd_full_names), levels = wd_full_names[wd_levels_full[wd_levels_full != "CV"]])
+  )
+
+if (nrow(df_pm_dir) == 0) {
+  ggplot() + theme_void()
+} else {
+  p_dir <- ggplot(df_pm_dir, aes(
+    x = dir_full,
+    y = mean_pm25,
+    fill = mean_wspm,
+    text = paste0(
+      "Direction: ", dir_full, "<br>",
+      "Mean PM2.5: ", round(mean_pm25, 1), " µg/m³<br>",
+      "Mean wind speed: ", round(mean_wspm, 2), " m/s"
+    )
+  )) +
+    geom_col(color = "gray25") +
+    scale_fill_viridis_c(name = "Wind speed (avg)") +
+    labs(
+      title = "Mean PM2.5 by wind direction",
+      subtitle = "Fill = mean wind speed (m/s)",
+      x = "Wind direction",
+      y = "Mean PM2.5 (ug/m^3)"
+    ) +
+    theme(legend.position = "right")
+  ggplotly(p_dir, tooltip = "text")
+}
+```

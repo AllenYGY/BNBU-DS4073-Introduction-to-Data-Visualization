@@ -1,0 +1,238 @@
+---
+title: "Lab10 Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: [ "wechat", "menu"]
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(flexdashboard)
+```
+
+# PAGE 0 {.sidebar}
+
+Setup: Please install the package `flexdashboard` if you have not installed it.
+
+```{r eval=F}
+#pkgs <- c("flexdashboard")
+#install.packages(pkgs)
+```
+
+Layout setting: `orientation: rows/columns/scroll`
+
+Convert a page or a column into a sidebar on the left side of the dashboard by adding the `{.sidebar}` attribute.\
+e.g.\
+`# PAGE {.sidebar}`
+
+# PAGE 1
+
+## Row
+
+### chart (1)
+
+```{r}
+
+```
+
+## Row
+
+### chart (2)
+
+```{r}
+
+```
+
+### chart (3)
+
+```{r}
+
+```
+
+# Heading/Tabset
+
+## Row 1
+
+### Headings
+
+`# First-level heading (page)`\
+`## Second-level heading (row or column)`\
+`### Third-level heading (pane for plot, chart, etc.)`
+
+## Row 2
+
+### Tabset
+
+If you have several components you’d like to display within a row or column then rather than attempting to fit them all on screen at the same time you can lay them out as a tabset.
+
+The tabset example uses class attributes, which are denoted with a `.` (period) prefix.
+
+Many flexdashboard layout options use attributes in the form of a **key-value pair**, such as `data-height=600`, in which the key and value are separated by an `=` (equal sign).
+
+## Row 3 {.tabset data-height="300,"}
+
+`## Row 3 {data-height=300, .tabset}`
+
+### chart (4)
+
+```{r}
+
+```
+
+### chart (5)
+
+```{r}
+
+```
+
+### chart (6)
+
+```{r}
+
+```
+
+# PAGE 3 {data-navmenu="Group Pages"}
+
+### Add a menu
+
+You can group pages into a `menu` within the top navigation bar by adding the attribute `{data-navmenu=}` to the page heading. Be careful - do not include spaces around the equals sign otherwise it will not work!
+
+e.g.\
+`# PAGE 3 {data-navmenu="Group Pages"}`\
+`# PAGE 4 {data-navmenu="Group Pages"}`
+
+# PAGE 4 {data-navmenu="Group Pages"}
+
+# Tables
+
+## Row 1 {data-height="300"}
+
+### Table
+
+You can include R code chunks that print outputs such as tables. But the output will look best and respond to the window size if you use the `kable()` function from **knitr** to display your tables.
+
+#### Show output in table
+
+```{r}
+knitr::kable(iris)
+```
+
+## Row 3
+
+### Dynamic table
+
+If you want to show a dynamic table that allows the user to filter, sort, and/or click through `pages` of the data frame, use the package **DT** and it’s function `datatable()`.
+
+```{r}
+DT::datatable(iris,
+              rownames = FALSE,
+              options = list(pageLength = 5, scrollY = FALSE),
+              class = "display")
+```
+
+# Plot
+
+## Row 1
+
+### Plot
+
+```{r}
+p <- ggplot(iris,
+            mapping = aes(x = Sepal.Length,
+                          y = Sepal.Width,
+                          color = Species)) + 
+  geom_point()
+p
+```
+
+### Interactive plot
+
+```{r}
+library(plotly)
+ggplotly(p)
+```
+
+## Row 2
+
+`{.hidden}`: hide the page/row/column
+
+### Plot 1 {.hidden}
+
+```{r}
+p <- ggplot(iris,
+            mapping = aes(x = Sepal.Length,
+                          y = Sepal.Width,
+                          color = Species)) + 
+  geom_point()
+p
+```
+
+### Interactive plot {.hidden}
+
+```{r}
+library(plotly)
+ggplotly(p)
+```
+
+# Page Icon {data-icon="fa-list"}
+
+You can add an icon to the navigation menu for a page using the `data-icon` attribute, e.g. `{data-icon="fa-list"}`
+
+# Storyboard {.storyboard}
+
+Storyboard page
+
+You can layout one or more pages of a dashboard as storyboards and then use traditional row and column layout on the other pages. To do this, you exclude the `storyboard: true` option and instead add the `{.storyboard}` class to pages you want laid out as storyboards.
+
+### Frame 1 - Commentary
+
+You may wish to add commentary alongside the frames in your storyboard. To do this you add a horizontal rule separator (\*\*\*) after the main body of frame content. Content after the separator will appear in a commentary sidebar to the right. For example:
+
+```{r}
+```
+
+------------------------------------------------------------------------
+
+Some commentary about Frame 1.
+
+### Frame 2
+
+```{r}
+```
+
+------------------------------------------------------------------------
+
+Some commentary about Frame 2.
+
+### Frame 3
+
+```{r}
+```
+
+# Theme
+
+### Theme
+
+A variety of themes are available to modify the base appearance of flexdashboard. Available themes include:
+
+-   default\
+-   cosmo\
+-   bootstrap\
+-   cerulean\
+-   journal\
+-   flatly\
+-   readable\
+-   spacelab\
+-   united\
+-   lumen\
+-   paper\
+-   sandstone\
+-   simplex\
+-   yeti
+
+# Resource
+
+<https://pkgs.rstudio.com/flexdashboard/articles/using.html#icon-sets>

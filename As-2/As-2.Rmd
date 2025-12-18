@@ -1,0 +1,270 @@
+---
+title: "Assignment 2"
+author: "Junya YANG 2230026188"
+date: "`r Sys.Date()`"
+
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description
+
+Please complete the codes such that they can get the same outputs. Submit the **.html** and **.rmd** documents to iSpace.
+
+## **Q1 (15 marks) Use the dataset CPS85 from the package mosaicData. Please count the number of females and males in each sector.**
+
+### **Hint**: You can copy the command `View(CPS85)` in the console to view the tabular data of CPS85.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+data(CPS85, package = "mosaicData")
+#View(CPS85)
+
+new_data = CPS85 %>%
+  group_by(sex, sector) %>%
+  summarise(n = n()) %>%
+  arrange(sector, sex)
+
+new_data
+```
+
+Construct a stacked bar chart to show the number of females and males in each sectors.
+
+**Hint**: `geom_text()` may help you show the numbers in the bars. The two color values `#C73C68` and `B6C468` can help.
+
+```{r}
+
+ggplot(new_data, aes(x = reorder(sector, -n, sum), y = n, fill = sex)) +
+  geom_col(position = "stack") +
+  geom_text(aes(label = n),
+            position = position_stack(vjust = 0.5),
+            color = "white",
+            size = 4) +
+  scale_fill_manual(values = c(
+    "F" = "#C73C68",
+    "M" = "#B6C468"   # 注意这里要有 #
+  ))  +
+  labs(x =NULL,
+        y = "Number of persons",
+       fill = "Sex") +
+  theme(
+  panel.grid = element_blank(),
+  panel.background = element_blank(),
+  axis.line = element_line()
+)+
+  coord_flip()
+
+
+```
+
+## **Q2 (15 marks) Based on the dataset `SaratogaHouses` from package `mosaicData`, please draw a scatterplot for house ages and prices with quadratic line of best fit.**
+
+**Hint**: `geom_smooth()` may help you to construct the quadratic regression line. You can specify the points with `size = 1`, `alpha = 0.4`, the fitting line with `size = 0.5`, `color = "tomato"`.
+
+```{r}
+library(ggplot2)
+library(mosaicData)
+library(scales)
+
+ggplot(SaratogaHouses, aes(x = age, y = price)) +
+  geom_point(size = 1, alpha = 0.4,color="blue") +
+  geom_smooth(
+    method  = "lm",
+    formula = y ~ poly(x, 2),  
+    color   = "tomato",
+    size    = 0.5,
+    se      = TRUE
+  ) +
+  scale_y_continuous(labels = label_dollar())+
+  labs(
+    title = "Age vs. Price",
+    subtitle = "Houses in Saratoga",
+    x = "Age of house",
+    y = "Price"
+  )+  
+  theme(
+  panel.background = element_rect(fill = "white"),  
+  panel.grid.major = element_line(color = "grey95"),  
+  panel.grid.minor = element_line(color = "grey95")
+)
+
+```
+
+## **Q3 (15 marks) Based on the dataset `SaratogaHouses` from package `mosaicData`, please draw the boxplot for the house price by number of rooms.**
+
+**Hint**: Transparency of boxplot is specified as `alpha = 0.5`.
+
+```{r}
+library(ggplot2)
+library(mosaicData)
+library(scales)
+
+ggplot(SaratogaHouses, aes(x = factor(rooms), y = price)) +
+  geom_boxplot(
+    notch = TRUE,
+    fill  = "cornflowerblue",
+    alpha = 0.5        
+  ) +
+  scale_y_continuous(labels = label_dollar()) + 
+  labs(
+    title = "House Price by Number of Rooms",
+    x = "Number of Rooms",
+    y = "Price"
+  ) +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(color = "grey95"),
+    panel.grid.minor = element_line(color = "grey98")
+  )
+
+```
+
+## Q4 (15 marks) Please plot the Cleveland dot chart for the percentage of receipts in GDP by country. The datasset newgdp from the package CGPfunctions records current receipts of fifteen national governments as a percentage of gross domestic product. You can read more detail by running the code ??newgdp in the console.
+
+1.  Selecting all the data in year 1979 and mutate the GDP into percentage.
+2.  Plot the Cleveland dot chart for GDP percentage by country.
+
+Hint: Please install the package `CGPfunctions` if you haven’t installed. (No need to write the install code in the R code chunk below.) The range of x is (0.2, 0.6).
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(CGPfunctions)
+library(scales)
+
+data(newgdp, package = "CGPfunctions")
+
+gdp_1979 <- newgdp %>%
+  filter(Year == "Year1979") %>%
+  mutate(GDP_pct = GDP / 100) %>%
+  arrange(GDP_pct) %>%                        
+  mutate(Country = factor(Country, levels = Country))  
+
+ggplot(gdp_1979,
+       aes(x = GDP_pct,
+           y = reorder(Country, GDP_pct))) + 
+  geom_segment(aes(x = 0.2, xend = GDP_pct,
+                   y = Country, yend = Country),
+               color = "grey85") +
+  geom_point(size = 2,color="pink") +
+  scale_x_continuous(
+    limits = c(0.2, 0.6),
+    labels = label_percent(accuracy = 1)
+  ) +
+  labs(
+    title = "Percentage of Receipts in GDP by Country",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor  = element_blank()
+  )
+
+```
+
+## **Q5 (40 marks) A tiny project**
+
+The data file **Real-Estate.txt** contains information on the homes sold in the Denver area during the year 2003. The variables in this data file are as follows:
+
+```{r}
+library(readr)
+estate_data=readr::read_table("Real-Estate.txt")
+
+View(estate_data)
+```
+
+1.  (10 marks) Please analyze the data and abstract at least 2 tasks.
+
+```{r}
+library(dplyr)
+library(readr)
+
+# Load and lightly clean the data
+estate_raw <- read_table("Real-Estate.txt", col_types = cols())
+estate <- estate_raw %>%
+  mutate(
+    Pool     = factor(Pool, labels = c("No pool", "Pool")),
+    Garage   = factor(Garage, labels = c("No garage", "Garage")),
+    Township = factor(Township)
+  )
+
+# Quick structure + summary to understand ranges
+glimpse(estate)
+summary(estate)
+
+# Task 1: How strongly do home size and bedroom count explain sale price?
+task1_overview <- estate %>%
+  group_by(Bedrooms) %>%
+  summarise(mean_price = mean(Price), mean_size = mean(Size), .groups = "drop")
+
+# Task 2: Do amenities (pool/garage) offset the distance-to-downtown penalty on price?
+task2_overview <- estate %>%
+  group_by(Pool, Garage) %>%
+  summarise(mean_price = mean(Price), med_distance = median(Distance), n = n(), .groups = "drop") %>%
+  arrange(desc(mean_price))
+
+task1_overview
+task2_overview
+```
+
+2.  (15 marks) Design your visualization according to the design principles and give your justification. Please write your design thoughts clearly.
+
+```{r}
+cat(
+  "- Goal 1: Show how size/bedrooms drive price. Use a scatterplot of Size vs Price; color by Bedrooms to keep a small legend and add one global linear fit to convey trend.\n",
+  "- Goal 2: Show whether amenities overcome distance penalty. Plot Price vs Distance; color by pool/garage combinations; smooth with loess to reveal non-linear decay and any uplift from amenities.\n",
+  "Design choices: minimalist grid for readability, dollar formatting on price, subdued palette with one accent per category, semi-transparent points to manage overlap, short titles that state the takeaway."
+)
+```
+
+3.  (15 marks) Implement your visualization by R. Please write the annotations for each step.
+
+```{r}
+library(ggplot2)
+library(scales)
+
+# Scatter: size vs price, colored by bedrooms, with overall linear fit
+p_size_price <- ggplot(estate, aes(x = Size, y = Price, color = factor(Bedrooms))) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "grey30", size = 0.6) +
+  scale_color_brewer(palette = "Set2", name = "Bedrooms") +
+  scale_y_continuous(labels = label_dollar(suffix = "k", prefix = "$")) +
+  labs(
+    title = "Larger homes command higher prices",
+    subtitle = "Denver sales, 2003; linear fit across all homes",
+    x = "Size (sq ft)",
+    y = "Sale price (USD thousands)"
+  ) +
+  theme_minimal()
+
+# Prep amenity combo label for second plot
+estate <- estate %>%
+  mutate(amenity = interaction(Pool, Garage, sep = " + "))
+
+# Scatter: distance vs price, colored by amenity combo, with loess smoothing
+p_distance_amenity <- ggplot(estate, aes(x = Distance, y = Price, color = amenity)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "loess", se = FALSE, size = 0.6) +
+  scale_color_manual(
+    values = c("#6C8EBF", "#F28E2B", "#8FD694", "#C67ACE"),
+    name = "Amenities"
+  ) +
+  scale_y_continuous(labels = label_dollar(suffix = "k", prefix = "$")) +
+  labs(
+    title = "Pools/garages soften the distance penalty",
+    subtitle = "Sale price vs. miles from city center",
+    x = "Distance to downtown (miles)",
+    y = "Sale price (USD thousands)"
+  ) +
+  theme_minimal()
+
+p_size_price
+p_distance_amenity
+```

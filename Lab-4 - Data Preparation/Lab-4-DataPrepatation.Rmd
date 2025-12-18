@@ -1,0 +1,345 @@
+---
+title: 'Lab4: Data Preparation'
+author: "Junya YANG 2230026188"
+date: "Oct 14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Visualization
+
+**Setup**
+
+In order to import and clean data in this guide, you’ll need to install some optional R packages. To install all of the necessary packages, run the following code in the RStudio **console** window:
+
+```{r eval=FALSE}
+# Define the variable pkgs that contatins all the required packages and install them.
+
+pkgs <- c("readr", "readxl", "haven", "dplyr", "tidyr", "VIM")
+install.packages(pkgs)
+```
+
+Before you can visualize your data, you have to get it into R. This involves importing the data from an external source and massaging it into a useful format.
+
+# 1 Importing data
+
+R can import data from almost any source, including text files, excel spreadsheets, statistical packages, and database management systems. We’ll illustrate these techniques using the Salaries dataset, containing the 9 month academic salaries of college professors at a single institution in 2008-2009.
+
+## 1.1 Text files
+
+The `readr` package provides functions for importing delimited text files into R data frames.
+
+```{r}
+# loading package
+library(readr)
+
+# import data from a comma delimited file
+Salaries1 <- read_csv("salaries.csv")
+
+# import data from a tab delimited file
+Salaries2 <- read_tsv("salaries.txt")
+```
+
+These function assume that the first line of data contains the variable names, values are separated by commas or tabs respectively, and that missing data are represented by blanks. For example, the first few lines of the comma delimited file looks like this.
+
+```{r eval=FALSE, message=TRUE}
+"rank","discipline","yrs.since.phd","yrs.service","sex","salary"
+"Prof","B",19,18,"Male",139750
+"Prof","B",20,16,"Male",173200
+"AsstProf","B",4,3,"Male",79750
+"Prof","B",45,39,"Male",115000
+"Prof","B",40,41,"Male",141500
+"AssocProf","B",6,6,"Male",97000
+```
+
+The `readxl` package can import data from Excel workbooks. Both xls and xlsx formats are supported.
+
+```{r}
+# loading package
+library(readxl)
+
+# import data from an Excel workbook
+Salaries3 <- read_excel("salaries.xlsx", sheet=1)
+```
+
+Since workbooks can have more than one worksheet, you can specify the one you want with the sheet option. The default is `sheet=1`.
+
+## 1.3 Statistical packages
+
+The haven package provides functions for importing data from a variety of statistical packages.
+
+```{r}
+# loading package
+library(haven)
+
+# import data from Stata
+Salaries <- read_dta("salaries.dta")
+
+# import data from SPSS
+Salaries <- read_sav("salaries.sav")
+
+# import data from SAS
+Salaries <- read_sas("salaries.sas7bdat")
+```
+
+# 2 Cleaning data
+
+The processes of cleaning your data can be the most time-consuming part of any data analysis. The most important steps are considered below. While there are many approaches, those using the `dplyr` and `tidyr` packages are some of the quickest and easiest to learn.
+
+Examples in this section will use the `starwars` dataset from the `dplyr` package. The dataset provides descriptions of 87 characters from the Star Wars universe on 13 variables.
+
+## 2.1 Selecting variables
+
+The `select` function allows you to limit your dataset to specified variables (columns).
+
+```{r}
+# loading package
+library(dplyr)
+# newdata <- starwars
+# keep the variables name, height, and gender
+newdata <- select(starwars, name, height, gender)
+
+# keep the variables name and all variables between mass and species inclusive
+newdata <- select(starwars, name, mass:species)
+```
+
+$\color{red}{\text{In class exercise}}$
+
+```{r}
+# keep all variables except birth_year and gender
+# write your answer here
+select(starwars, -birth_year, -gender)
+```
+
+## 2.2 Selecting observations
+
+The `filter` function allows you to limit your dataset to observations (rows) meeting a specific criteria. Multiple criteria can be combined with the `&` (AND) and `|` (OR) symbols.
+
+```{r}
+# loading package
+library(dplyr)
+
+# select females
+newdata <- filter(starwars, 
+                  gender == "feminine")
+
+# select females that are from Alderaan
+newdata <- filter(starwars, 
+                  gender == "feminine" & 
+                  homeworld == "Alderaan")
+
+
+# select individuals that are from Alderaan, Coruscant, or Endor
+newdata <- filter(starwars, 
+                  homeworld == "Alderaan" | 
+                  homeworld == "Coruscant" | 
+                  homeworld == "Endor")
+
+# this can be written more succinctly as
+newdata <- filter(starwars, 
+                  homeworld %in% c("Alderaan", "Coruscant", "Endor"))
+```
+
+$\color{red}{\text{In class exercise}}$
+
+```{r}
+# select individuals who is human and higher than 1.7
+# write your answer here
+newdata <- filter(starwars, species == "Human" & height>170)
+print(newdata)
+```
+
+## 2.3 Creating/Recoding variables
+
+The `mutate` function allows you to create new variables or transform existing ones.
+
+```{r}
+# loading package
+library(dplyr)
+
+# convert height in centimeters to inches, 
+# and mass in kilograms to pounds
+newdata <- mutate(starwars, 
+                  height = height * 0.394,
+                  mass   = mass   * 2.205)
+```
+
+The `ifelse` function (part of base R) can be used for recoding data. The format is `ifelse(test, return if TRUE, return if FALSE)`.
+
+```{r}
+# loading package
+library(dplyr)
+
+# if height is greater than 180 
+# then heightcat = "tall", 
+# otherwise heightcat = "short"
+
+newdata <- mutate(starwars, heightcat = ifelse(height > 180, "tall", "short"))
+
+# set heights greater than 200 or less than 75 to missing
+newdata <- mutate(starwars, 
+                  height = ifelse(height < 75 | height > 200, 
+                                  NA, height))
+```
+
+$\color{red}{\text{In class exercise}}$
+
+```{r}
+# convert any eye color that is not black, blue or brown, to other
+# write your answer here
+newdata <- mutate(starwars, eye_color = ifelse(eye_color %in% c("black", "blue", "brown"), eye_color, "other"))
+
+```
+
+## 2.4 Summarizing data
+
+The `summarize` function can be used to reduce multiple values down to a single value (such as a mean). It is often used in conjunction with the `by_group` function, to calculate statistics by group. In the code below, the `na.rm=TRUE` option is used to drop missing values before calculating the means.
+
+```{r}
+library(dplyr)
+# calculate mean height and mass
+newdata <- summarize(starwars, 
+                     mean_ht = mean(height, na.rm=TRUE),
+                     mean_mass = mean(mass, na.rm=TRUE))
+newdata
+```
+
+```{r}
+# calculate mean height and weight by gender
+newdata <- group_by(starwars, gender)
+newdata <- summarize(newdata, 
+                     mean_ht = mean(height, na.rm=TRUE), 
+                     mean_wt = mean(mass, na.rm=TRUE))
+print(newdata)
+```
+
+## 2.5 Using pipes
+
+Packages like `dplyr` and `tidyr` allow you to write your code in a compact format using the pipe `%>%` operator. Here is an example.
+
+```{r}
+library(dplyr)
+
+# calculate the mean height for women by species
+newdata <- filter(starwars, gender == "feminine")
+newdata <- group_by(newdata, species)
+newdata <- summarize(newdata, mean_ht = mean(height, na.rm = TRUE))
+
+# this can be written as
+newdata <- starwars %>% 
+  filter(gender == "feminine") %>%
+  group_by(species) %>%
+  summarize(mean_ht = mean(height, na.rm = TRUE))
+
+```
+
+The `%>%` operator passes the result on the left to the first parameter of the function on the right.
+
+## 2.6 Reshaping data
+
+Some graphs require the data to be in wide format, while some graphs require the data to be in long format.
+
+```{r}
+# loading package
+library(tidyr)
+
+# define a wide dataset
+wide_data <- data.frame(id = c(01, 02, 03),
+                        name = c("Bill", "Bob", "Mary"),
+                        sex = c("Male", "Male", "Female"),
+                        age = c("22", "35", "48"),
+                        income = c(40000, 90000, 150000))
+wide_data
+
+
+# convert a wide dataset to a long dataset
+long_data <- gather(wide_data, 
+                    key="variable", 
+                    value="value", 
+                    sex:income)
+print(long_data)
+```
+
+Conversely, you can convert a long dataset to a wide dataset using
+
+```{r}
+# loading package
+library(tidyr)
+
+# convert a long dataset to a wide dataset
+wide_data <- spread(long_data, variable, value)
+print(wide_data)
+```
+
+## 2.7 Missing data
+
+Real data are likely to contain missing values. There are three basic approaches to dealing with missing data: feature selection, listwise deletion, and imputation. Let’s see how each applies to the `msleep` dataset from the `ggplot2` package. The `msleep` dataset describes the sleep habits of mammals and contains missing values on several variables.
+
+### 2.7.1 Feature selection
+
+In feature selection, you delete variables (columns) that contain too many missing values.
+
+```{r}
+# loading data
+data(msleep, package="ggplot2")
+
+# what is the proportion of missing data for each variable?
+pctmiss <- colSums(is.na(msleep))/nrow(msleep)
+round(pctmiss, 2)
+```
+
+### 2.7.2 Listwise deletion
+
+Listwise deletion involves deleting observations (rows) that contain missing values on *any* of the variables of interest.
+
+```{r}
+# Create a dataset containing genus, vore, and conservation.
+# Delete any rows containing missing data.
+newdata <- select(msleep, genus, vore, conservation)
+newdata <- na.omit(newdata)
+```
+
+### 2.7.3 Imputation
+
+Imputation involves replacing missing values with “reasonable” guesses about what the values would have been if they had not been missing. There are several approaches, as detailed in such packages as `VIM`, `mice`, `Amelia` and `missForest`. Here we will use the `kNN` function from the `VIM` package to replace missing values with imputed values.
+
+```{r}
+# loading package
+library(VIM)
+
+# Impute missing values using the 5 nearest neighbors
+newdata <- kNN(msleep, k=5)
+```
+
+Basically, for each case with a missing value, the k most similar cases not having a missing value are selected. If the missing value is numeric, the mean of those k cases is used as the imputed value. If the missing value is categorical, the most frequent value from the k cases is used. The process iterates over cases and variables until the results converge (become stable).
+
+$\color{red}{\text{ # 3 In-class exercise}}$
+
+Please download the `Salaries.txt` from iSpace and complete the following requirements.
+
+```{r}
+# loading package
+library(dplyr)
+library(readr)
+
+# Please read Salaries data from the file Salaries.txt
+# write your answer here
+data = read_tsv("Salaries.txt")
+print(data)
+# Select the female professors whose salaries are between 80000 and 100000
+# write your answer here
+newdata <- filter(data, sex == "Female", salary >= 80000, salary <= 100000)
+
+# Calculate the mean of income of professors grouped by sex
+# write your answer here
+income_by_sex <- data %>%
+  group_by(sex) %>%
+  summarise(mean_salary = mean(salary))
+
+# using pipe %>% operator in your answer for last question
+
+
+```

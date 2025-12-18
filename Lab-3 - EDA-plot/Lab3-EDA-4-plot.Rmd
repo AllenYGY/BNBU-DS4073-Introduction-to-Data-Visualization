@@ -1,0 +1,227 @@
+---
+title: "Lab3-EDA 4-plot"
+author: "Junya YANG 2230026188"
+date: "Sep 26"
+output: html_document
+---
+
+# 1 4-Plot
+
+## 1.1 Run sequence plot ($Y_i$ versus $i$)
+
+```{r}
+n <- 300
+y <- rnorm(n,mean=0,sd=5)
+plot(1:n,y,type="l",
+     main = "Run sequence plot",
+     xlab = "i",
+     ylab = "Y_i")
+```
+
+```{r}
+# shifts in location
+n <- 200
+m <- 100
+sdata <- c(rnorm(n,mean=0,sd=2), rnorm(m,mean=-15,sd=2)+
+             c(seq(10,0,length.out=50),seq(0,5,length.out=50)))
+plot(1:(n+m),sdata,type="l",
+     main = "Run sequence plot",
+     xlab = "i",
+     ylab = "Y_i")
+```
+
+## 1.2 Lag plot ($Lag_k(Y)$ vs $Y$)
+
+```{r}
+# Random data
+n <- 200
+# Generates random numbers uniformly distributed between a and b.
+y <- runif(n,0,10)
+# Adjusts the size of the plot symbols (points). 0.5 makes them smaller than the default.
+plot(1:n, y, type = "o", cex=0.5, col="blue")
+# Specifies the plotting character (symbol) for the points. 16 corresponds to a filled circle.
+points(1:n, y, col="red", cex=0.5, pch=16)
+```
+
+```{r}
+plot(y[-1], y[-length(y)], type = "p", cex = 1, col = "red",
+     pch = 16, main = "Lag 1 Plot of Series",
+     xlab = "Lag 1 series",
+     ylab = "Series",
+     xlim = c(0, 10),
+     ylim = c(0, 10))
+```
+
+```{r}
+# Data with weak autocorrelation
+n <- 200
+y <- filter(rnorm(n), filter=rep(1,5), circular=TRUE)
+plot(1:n, y, type = "o", cex=0.5, col="blue")
+points(1:n, y, col="red", cex=0.5, pch=16)
+```
+
+```{r}
+plot(y[-1],y[-length(y)], type="p", cex=1, col="red", pch=16)
+```
+
+```{r}
+# Data with high autocorrelation
+n <- 200
+y <- 1:n + rnorm(n,0,2)
+
+plot(1:n, y, type = "o", cex=0.5, col="blue")
+points(1:n, y, col="red", cex=0.5, pch=16)
+```
+
+```{r}
+plot(y[-1],y[-length(y)],type="p",cex=1,col="red",pch=16)
+```
+
+```{r}
+# Sinusoidal data
+n <- 200
+y <- 2*sin(1:n)+c(rnorm(n-3,0,0.2),rnorm(3,2,3))
+
+plot(1:n, y, type = "o", cex=0.5, col="blue")
+points(1:n, y, col="red", cex=0.5, pch=16)
+```
+
+```{r}
+plot(y[-1],y[-length(y)], type="p", cex=1, col="red", pch=16)
+```
+
+## 1.3 Histogram
+
+```{r}
+# Normal Distribution, Beta Distribution, Chi-Squared Distribution, Gamma Distribution, t-Distribution, Weibull Distribution, Geometric Distribution, Poisson Distribution, Cauchy Distribution
+par(mfrow=c(3,3))
+n <- 2000
+x1 <- rnorm(n,0,1)
+x2 <- rbeta(n, 10,1)
+x3 <- rchisq(n,3)
+x4 <- rgamma(n,5)
+x5 <- rt(n,5)
+x6 <- rweibull(n, 1)
+x7 <- rgeom(n, 0.3)
+x8 <- rpois(n, 5)
+x9 <- rcauchy(n,1000)
+hist(x1, breaks = 50)
+hist(x2, breaks = 50)
+hist(x3, breaks = 50)
+hist(x4, breaks = 50)
+hist(x5, breaks = 50)
+hist(x6, breaks = 50)
+hist(x7, breaks = 50)
+hist(x8, breaks = 50)
+hist(x9, breaks = 50)
+
+```
+
+```{r}
+### Task: Change the title of each histogram to corresponding distribution, for example "Normal Distribution"
+# Normal Distribution, Beta Distribution, Chi-Squared Distribution, Gamma Distribution, t-Distribution, Weibull Distribution, Geometric Distribution, Poisson Distribution, Cauchy Distribution
+par(mfrow=c(3,3))
+n <- 2000
+x1 <- rnorm(n,0,1)
+x2 <- rbeta(n, 10,1)
+x3 <- rchisq(n,3)
+x4 <- rgamma(n,5)
+x5 <- rt(n,5)
+x6 <- rweibull(n, 1)
+x7 <- rgeom(n, 0.3)
+x8 <- rpois(n, 5)
+x9 <- rcauchy(n,1000)
+hist(x1, breaks = 50, main = "Normal Distribution")
+hist(x2, breaks = 50, main = "Beta Distribution")
+hist(x3, breaks = 50, main = "Chi-Squared Distribution")
+hist(x4, breaks = 50, main = "Gamma Distribution")
+hist(x5, breaks = 50, main = "t-Distribution Distribution")
+hist(x6, breaks = 50, main = "Weibull Distribution")
+hist(x7, breaks = 50, main = "Geometric Distribution")
+hist(x8, breaks = 50, main = "Poisson Distribution")
+hist(x9, breaks = 50, main = "Cauchy Distribution")
+
+```
+
+## **1.3 Normal probability plot (Theoretical normal value vs. ordered Y)**
+
+```{r}
+# normal data
+n <- 200
+x1 <- rnorm(n,0,0.1)
+qqnorm(x1, main="Normal data")
+qqline(x1)
+```
+
+A Q-Q plot is a graphical tool to compare the quantiles of your data against the quantiles of a theoretical normal distribution. If your data is normally distributed, the points in the Q-Q plot will approximately lie on a straight line.
+
+How to get theoretical quantiles?
+
+1.  Sort sample data. The number of samples is n.
+
+2.  Calculate the ranking percentile of sample data points.\
+    Suppose a sample point is ith point after sorting, then p = i/(n+1).
+
+3.  Calculate the theoretical quantile.\
+    The Z value corresponding to the given percentile p under the normal distribution. z \<- qnorm(p).
+
+```{r}
+# non-normal data
+n <- 200
+x2 <- rweibull(n, 1)
+qqnorm(x2, main="Weibull data")
+qqline(x2)
+```
+
+# **2 In-Class Exercise**
+
+Please draw the 4-plot for the data Data.txt (download from iSpace).
+
+Hint: use `par(mfrow=c(2,2))` to separate the window into 2\*2 parts.
+
+```{r}
+
+y <- read.table("data.txt", header = FALSE, stringsAsFactors = FALSE)
+y <- unlist(y)
+
+
+par(mfrow = c(2, 2), mar = c(4.5, 4.5, 2, 1))
+
+plot(1:length(y), y,
+     type = "l",
+     xlab = "Run sequence plot",
+     ylab = "",
+     xlim = c(0, 200),
+     ylim = c(-600, 300),
+     cex.axis = 0.8, 
+     cex.lab = 0.9   
+)
+
+
+plot(y[-1], y[-length(y)], type = "p", 
+     pch = 16,
+     cex = 0.5,
+     xlab = "Lag 1 plot",
+     ylab = "",
+     cex.axis = 0.8,
+     cex.lab = 0.9
+)
+
+
+hist(y, breaks = 20,
+     main = "Histogram of data",
+     xlab = "Histogram", 
+     ylab = "",
+     ylim = c(0, 25),
+     xlim = c(-2000, 2000), 
+     yaxt = "n",
+)
+
+axis(side = 2, at = seq(0, 25, by = 5), labels = FALSE)
+axis(side = 2, at = c(0, 10, 20), las = 0, cex.axis = 0.8)
+
+
+qqnorm(y, main="Normal Q-Q Plot",cex=0.5,xlab="Normal probablility plot")
+qqline(y)
+
+```

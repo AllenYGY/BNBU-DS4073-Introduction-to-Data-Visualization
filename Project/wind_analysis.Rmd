@@ -1,0 +1,379 @@
+---
+title: "Wind and PM2.5 Rose"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+params:
+  data_file: beijing_air_processed.csv
+---
+
+This notebook builds a pollution rose (wind rose colored by PM2.5 level) to explore how wind direction relates to dispersion or accumulation.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(scales)
+library(lubridate)
+```
+
+## 1) Load processed data
+
+```{r load}
+data_file <- if (!is.null(params$data_file)) params$data_file else "beijing_air_processed.csv"
+stopifnot(file.exists(data_file))
+
+air <- readr::read_csv(data_file, show_col_types = FALSE)
+
+has_season <- "season" %in% names(air)
+has_season_year <- "season_year" %in% names(air)
+has_region <- "region" %in% names(air)
+
+# ensure simplified wind direction exists; if not, compute using preprocessing rules
+simplify_wd <- function(wd) {
+  case_when(
+    wd %in% c("N", "NNE", "NE", "ENE") ~ "NE",
+    wd %in% c("E", "ESE", "SE", "SSE") ~ "SE",
+    wd %in% c("S", "SSW", "SW", "WSW") ~ "SW",
+    wd %in% c("W", "WNW", "NW", "NNW") ~ "NW",
+    TRUE ~ "CV"
+  )
+}
+
+dir_levels_simple <- c("NW", "NE", "SE", "SW", "CV")
+
+air <- air %>%
+  mutate(
+    month_num = month(datetime),
+    wd_simple = if (!"wd_simple" %in% names(air)) simplify_wd(wd) else wd_simple,
+    wd_simple = factor(wd_simple, levels = dir_levels_simple),
+    season = if (has_season) season else case_when(
+      month_num %in% 3:5 ~ "Spring",
+      month_num %in% 6:8 ~ "Summer",
+      month_num %in% 9:11 ~ "Autumn",
+      TRUE ~ "Winter"
+    ),
+    season = factor(season, levels = c("Spring", "Summer", "Autumn", "Winter")),
+    season_year = if (has_season_year) season_year else if_else(month_num < 3, year(datetime) - 1L, year(datetime)),
+    region = case_when(
+      station %in% c("Dingling", "Huairou", "Changping", "Shunyi") ~ "Suburban North",
+      TRUE ~ "Urban Central"
+    ),
+    region = factor(region, levels = c("Suburban North", "Urban Central")),
+    date = as_date(datetime)
+  )
+
+# ensure AQI bins exist; if not present, compute from pm2_5
+if (!"aqi_level" %in% names(air)) {
+  aqi_breaks <- c(-Inf, 35, 75, 115, 150, 250, Inf)
+  aqi_labels <- c("Good", "Moderate", "Unhealthy-SG", "Unhealthy", "Very Unhealthy", "Hazardous")
+  air <- air %>%
+    mutate(aqi_level = cut(pm2_5, breaks = aqi_breaks, labels = aqi_labels, right = FALSE, ordered_result = TRUE))
+} else {
+  air <- air %>% mutate(aqi_level = factor(aqi_level, ordered = TRUE))
+}
+
+aqi_palette <- c("darkgreen", "gold", "orange", "red", "purple", "brown")
+pollutants_multi <- c("pm2_5", "pm10", "no2", "o3")
+pollutant_labels <- c(pm2_5 = "PM2.5", pm10 = "PM10", no2 = "NO2", o3 = "O3")
+
+glimpse(air)
+```
+
+## 2) PM2.5 distribution by season
+
+```{r boxplot-season, fig.width=8, fig.height=4.5}
+box_df <- air %>%
+  filter(!is.na(pm2_5), !is.na(season))
+
+ggplot(box_df, aes(x = season, y = pm2_5, fill = season)) +
+  geom_boxplot(outlier.alpha = 0.2) +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  labs(
+    title = "PM2.5 distribution by season",
+    x = NULL,
+    y = "PM2.5 (ug/m^3)"
+  ) +
+  theme_minimal()
+```
+
+## 3) Calendar heatmap (daily PM2.5)
+
+```{r calendar-heatmap, fig.width=10, fig.height=6}
+years_available <- air %>% mutate(year = year(date)) %>% distinct(year) %>% pull()
+target_year <- if (2016 %in% years_available) 2016 else max(years_available, na.rm = TRUE)
+
+cal_df <- air %>%
+  mutate(
+    year = year(date),
+    month_lab = month(date, label = TRUE, abbr = TRUE),
+    week = isoweek(date),
+    wday = wday(date, week_start = 1, label = TRUE)
+  ) %>%
+  filter(year == target_year) %>%
+  group_by(date, month_lab, week, wday) %>%
+  summarise(pm2_5 = mean(pm2_5, na.rm = TRUE), .groups = "drop")
+
+ggplot(cal_df, aes(x = week, y = wday, fill = pm2_5)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "B", name = "PM2.5") +
+  facet_wrap(~month_lab, ncol = 3) +
+  labs(
+    title = paste("Daily PM2.5 calendar heatmap -", target_year),
+    x = "ISO week",
+    y = "Weekday"
+  ) +
+  theme_minimal()
+```
+
+## 4) Urban vs suburban daily gap
+
+```{r urban-suburban, fig.width=9, fig.height=5}
+daily_avg <- air %>%
+  filter(!is.na(region)) %>%
+  group_by(date, region) %>%
+  summarise(mean_pm = mean(pm2_5, na.rm = TRUE), .groups = "drop")
+
+ggplot(daily_avg, aes(x = date, y = mean_pm, color = region)) +
+  geom_line(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE, span = 0.2) +
+  labs(
+    title = "Daily PM2.5: Urban Central vs Suburban North",
+    x = NULL,
+    y = "Mean PM2.5 (ug/m^3)",
+    color = "Region"
+  ) +
+  theme_minimal()
+```
+
+## 5) AQI compliance evolution
+
+```{r aqi-stacked, fig.width=8, fig.height=4.5}
+aqi_stack <- air %>%
+  filter(!is.na(season_year), !is.na(aqi_level)) %>%
+  count(season_year, aqi_level, name = "n") %>%
+  group_by(season_year) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(aqi_stack, aes(x = factor(season_year), y = prop, fill = aqi_level)) +
+  geom_col(width = 0.8) +
+  scale_y_continuous(labels = percent_format()) +
+  scale_fill_manual(values = c("darkgreen", "gold", "orange", "red", "purple", "brown"), name = "AQI level") +
+  labs(
+    title = "AQI compliance by seasonal year",
+    x = "Seasonal year (Mar-Feb)",
+    y = "Share of hours"
+  ) +
+  theme_minimal()
+```
+
+## 6) Pollution rose (simplified wind direction)
+
+```{r pollution-rose, fig.width=7, fig.height=6}
+rose_df <- air %>%
+  filter(!is.na(wd_simple), wd_simple != "CV", !is.na(pm2_5), !is.na(aqi_level)) %>%
+  count(wd_simple, aqi_level, name = "n") %>%
+  group_by(wd_simple) %>%
+  mutate(freq = n / sum(n)) %>%
+  ungroup()
+
+ggplot(rose_df, aes(x = wd_simple, y = freq, fill = aqi_level)) +
+  geom_col(width = 1, color = "gray25") +
+  coord_polar(start = -pi/16) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_fill_manual(values = aqi_palette, name = "PM2.5 level") +
+  labs(
+    title = "Pollution rose by simplified wind direction",
+    x = "Wind direction (simplified)",
+    y = "Frequency share"
+  ) +
+  theme(legend.position = "right")
+```
+
+## 7) By season (seasonal comparison)
+
+```{r pollution-rose-season, fig.width=10, fig.height=8}
+rose_season <- air %>%
+  filter(!is.na(wd_simple), wd_simple != "CV", !is.na(pm2_5), !is.na(aqi_level), !is.na(season)) %>%
+  count(season, wd_simple, aqi_level, name = "n") %>%
+  group_by(season, wd_simple) %>%
+  mutate(freq = n / sum(n)) %>%
+  ungroup()
+
+ggplot(rose_season, aes(x = wd_simple, y = freq, fill = aqi_level)) +
+  geom_col(width = 1, color = "gray25") +
+  coord_polar(start = -pi/16) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_fill_manual(values = aqi_palette, name = "PM2.5 level") +
+  labs(
+    title = "Pollution rose by simplified wind direction and season",
+    x = "Wind direction (simplified)",
+    y = "Frequency share"
+  ) +
+  facet_wrap(~season, ncol = 2) +
+  theme(legend.position = "bottom")
+```
+
+## 8) By region (direction and region)
+
+```{r pollution-rose-region, fig.width=10, fig.height=5}
+rose_region <- air %>%
+  filter(!is.na(wd_simple), wd_simple != "CV", !is.na(pm2_5), !is.na(aqi_level), !is.na(region)) %>%
+  count(region, wd_simple, aqi_level, name = "n") %>%
+  group_by(region, wd_simple) %>%
+  mutate(freq = n / sum(n)) %>%
+  ungroup()
+
+ggplot(rose_region, aes(x = wd_simple, y = freq, fill = aqi_level)) +
+  geom_col(width = 1, color = "gray25") +
+  coord_polar(start = -pi/16) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_fill_manual(values = aqi_palette, name = "PM2.5 level") +
+  labs(
+    title = "Pollution rose by simplified wind direction and region",
+    x = "Wind direction (simplified)",
+    y = "Frequency share"
+  ) +
+  facet_wrap(~region) +
+  theme(legend.position = "bottom")
+```
+
+## 9) Mean PM2.5 by direction and wind speed
+
+```{r pm25-weighted, fig.width=8, fig.height=4.5}
+pm25_wind <- air %>%
+  filter(!is.na(wd_simple), wd_simple != "CV", !is.na(pm2_5), !is.na(wspm)) %>%
+  group_by(wd_simple) %>%
+  summarise(
+    mean_pm25 = mean(pm2_5, na.rm = TRUE),
+    mean_wspm = mean(wspm, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(pm25_wind, aes(x = wd_simple, y = mean_pm25, fill = mean_wspm)) +
+  geom_col(color = "gray25") +
+  scale_fill_viridis_c(name = "Wind speed (avg)") +
+  labs(
+    title = "Mean PM2.5 by wind direction (simplified)",
+    x = "Wind direction (simplified)",
+    y = "Mean PM2.5 (ug/m^3)"
+  ) +
+  theme(legend.position = "right")
+```
+
+## 10) Temperature vs PM2.5 by season
+
+```{r temp-pm25-season, fig.width=10, fig.height=8}
+temp_pm <- air %>%
+  filter(!is.na(temp), !is.na(pm2_5), !is.na(season))
+
+ggplot(temp_pm, aes(x = temp, y = pm2_5)) +
+  geom_bin2d(bins = 40) +
+  scale_fill_viridis_c(name = "Count", option = "C", trans = "sqrt") +
+  labs(
+    title = "Temperature vs PM2.5 by season",
+    x = "Temperature (degC)",
+    y = "PM2.5 (ug/m^3)"
+  ) +
+  facet_wrap(~season, ncol = 2) +
+  theme_minimal()
+```
+
+## 11) Lag-1 plot (autocorrelation)
+
+```{r lag-plot, fig.width=6.5, fig.height=6.5}
+lag_df <- air %>%
+  arrange(station, datetime) %>%
+  group_by(station) %>%
+  mutate(pm2_5_lag1 = lag(pm2_5, 1)) %>%
+  ungroup() %>%
+  filter(!is.na(pm2_5_lag1), !is.na(pm2_5))
+
+ggplot(lag_df, aes(x = pm2_5_lag1, y = pm2_5)) +
+  geom_hex(bins = 40) +
+  scale_fill_viridis_c(name = "Count", option = "C", trans = "sqrt") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  coord_equal() +
+  labs(
+    title = "Lag-1 plot: PM2.5 persistence",
+    x = "PM2.5 at t-1",
+    y = "PM2.5 at t"
+  ) +
+  theme_minimal()
+```
+
+## 12) Multi-pollutant distribution by season
+
+```{r multi-boxplot, fig.width=10, fig.height=6}
+box_multi <- air %>%
+  pivot_longer(all_of(pollutants_multi), names_to = "pollutant", values_to = "value") %>%
+  filter(!is.na(value), !is.na(season)) %>%
+  mutate(pollutant = recode(pollutant, !!!pollutant_labels))
+
+ggplot(box_multi, aes(x = season, y = value, fill = season)) +
+  geom_boxplot(outlier.alpha = 0.15) +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  labs(
+    title = "Distribution by season across pollutants",
+    x = NULL,
+    y = "Value"
+  ) +
+  facet_wrap(~pollutant, scales = "free_y") +
+  theme_minimal()
+```
+
+## 13) Multi-pollutant urban vs suburban trends
+
+```{r multi-urban-suburban, fig.width=10, fig.height=8}
+daily_multi <- air %>%
+  filter(!is.na(region)) %>%
+  mutate(date = as_date(datetime)) %>%
+  pivot_longer(all_of(pollutants_multi), names_to = "pollutant", values_to = "value") %>%
+  group_by(date, region, pollutant) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  mutate(pollutant = recode(pollutant, !!!pollutant_labels))
+
+ggplot(daily_multi, aes(x = date, y = mean_val, color = region)) +
+  geom_line(alpha = 0.25) +
+  geom_smooth(method = "loess", se = FALSE, span = 0.2) +
+  labs(
+    title = "Urban vs suburban daily means by pollutant",
+    x = NULL,
+    y = "Daily mean"
+  ) +
+  facet_wrap(~pollutant, scales = "free_y", ncol = 1) +
+  theme_minimal()
+```
+
+## 14) Correlation heatmap (pollutants and weather)
+
+```{r corr-heatmap, fig.width=8, fig.height=7}
+corr_vars <- c("pm2_5", "pm10", "so2", "no2", "co", "o3", "temp", "pres", "dewp", "rain", "wspm")
+
+corr_mat <- air %>%
+  select(any_of(corr_vars)) %>%
+  drop_na() %>%
+  cor()
+
+corr_df <- as.data.frame(as.table(corr_mat)) %>%
+  rename(var_x = Var1, var_y = Var2, corr = Freq)
+
+ggplot(corr_df, aes(x = var_x, y = var_y, fill = corr)) +
+  geom_tile(color = "white") +
+  scale_fill_distiller(palette = "RdBu", limits = c(-1, 1), name = "Correlation") +
+  coord_fixed() +
+  labs(
+    title = "Correlation heatmap: pollutants and weather",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## 15) Notes
+
+-   Angle encodes wind direction (`wd_simple`), radius encodes frequency share per direction, color encodes PM2.5 level (AQI-like bins). Region/season facets compare dispersion vs accumulation patterns.
+-   Calendar heatmap highlights daily PM2.5 streaks; AQI stacked bars show health compliance over seasonal years; urban vs suburban line shows spatial gap.

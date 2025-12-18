@@ -1,0 +1,515 @@
+---
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+下面我按结构把这份 Lab 里出现的**图形类型 + R/ggplot2
+代码**背后的知识点，给你系统梳理一下。你可以一边对照代码一边看概念。
+
+------------------------------------------------------------------------
+
+## 一、整体：Bivariate Graphs 双变量图
+
+**主题**：如何用图形来展示两个变量之间的关系。
+关键：先看这两个变量的类型：
+
+1.  **分类 vs. 分类**（categorical vs categorical）
+2.  **数值 vs. 数值**（quantitative vs quantitative）
+3.  **分类 vs. 数值**（categorical vs quantitative）
+
+不同组合 → 适合不同类型的图。
+
+------------------------------------------------------------------------
+
+## 二、分类 vs. 分类
+
+### 1. Stacked Bar Chart 堆叠条形图
+
+示例：`mpg` 数据集，变量：
+
+-   `class`：汽车类型（SUV、2seater、compact…）——**分类变量**
+-   `drv`：驱动类型（f 前驱、r 后驱、4 四驱）——**分类变量**
+
+代码核心：
+
+``` r
+ggplot(mpg, aes(x = class, fill = drv)) +
+  geom_bar(position = "stack")
+```
+
+知识点：
+
+1.  **geom_bar 默认统计计数** 不写 `stat=` 时，`geom_bar` 会对每个 `x`
+    组合统计频数（count）。
+
+2.  `x = class`：横轴为汽车类别。
+    `fill = drv`：用填充颜色表示不同驱动类型。
+
+3.  `position = "stack"`：
+
+    -   同一 `class` 的不同 `drv` 条形**上下堆叠**成一根柱子。
+
+    -   所以可以看：
+
+        -   每个类别的**总数量**
+        -   每个类别内部，各 `drv` 的**数量对比**。
+
+#### In-class exercise 解读
+
+你写的代码：
+
+``` r
+ggplot(mpg, aes(x = drv, fill = class)) +
+  geom_bar(position = "stack")
+```
+
+知识点：
+
+-   把 `x` 换成 `drv`，`fill` 换成
+    `class`，相当于：**“以驱动类型为主，拆成各类别”**
+
+-   想看“哪种 class 的四驱车最多”，可以：
+
+    -   要么像你这样，以 `drv` 为 x，然后专注看 `x == "4"`
+        那根柱子中颜色最多的一块；
+
+    -   或者用 **过滤 + 单变量条形图**：
+
+        ``` r
+        mpg %>% filter(drv == "4") %>%
+          ggplot(aes(x = class)) + geom_bar()
+        ```
+
+------------------------------------------------------------------------
+
+### 2. Grouped Bar Chart 分组条形图（并排）
+
+代码：
+
+``` r
+ggplot(mpg, aes(x = class, fill = drv)) +
+  geom_bar(position = "dodge")
+```
+
+知识点：
+
+1.  `position = "dodge"`： 同一 `class` 下不同 `drv`
+    的条形**左右并排**，方便比较各驱动类型数量。
+
+2.  默认行为：**零计数类别会被删掉** 某些 `class + drv`
+    的组合如果没有观测值，对应的条形就没了，剩下的条会自动变宽。
+
+增强版：
+
+``` r
+geom_bar(position = position_dodge(preserve = "single"))
+```
+
+-   `preserve = "single"` 会保留单独条形的宽度，即使有的组合 count =
+    0，也会留个位置，方便对齐和比较。
+
+------------------------------------------------------------------------
+
+### 3. Segmented Bar Chart（100% 堆叠柱形图）
+
+代码：
+
+``` r
+ggplot(mpg,
+       aes(x = class, fill = drv)) +
+  geom_bar(position = "fill") +
+  labs(y = "Proportion")
+```
+
+知识点：
+
+1.  `position = "fill"`：
+
+    -   每根柱子被标准化为高度 = 1（100%）
+    -   显示的是**比例**而不是数量。
+
+2.  适合比较： “各 `class` 内部，`drv` 的比例结构是否变化？”
+
+------------------------------------------------------------------------
+
+### 4. factor 重排 & 美化
+
+代码里有：
+
+``` r
+aes(x = factor(class,
+               levels = c("2seater", "subcompact", "compact", ...)),
+    fill = factor(drv,
+                  levels = c("f","r","4"),
+                  labels = c("front-wheel","rear-wheel","4-wheel")))
+```
+
+知识点：
+
+1.  `factor(..., levels = ...)`
+
+    -   手动指定分类变量的**顺序**，控制 x 轴顺序或 legend 顺序。
+
+2.  `labels = ...`
+
+    -   替换水平的显示文字（更友好）
+
+3.  `scale_y_continuous(breaks = ..., labels = percent)`
+
+    -   控制 y 轴刻度位置和格式，这里用 `scales::percent` 把 0–1 换成
+        0%–100%。
+
+4.  `scale_fill_brewer(palette = "Set2")`
+
+    -   使用 ColorBrewer 的调色板，颜色更好看。
+
+5.  `theme_minimal()`
+
+    -   换成简洁主题，白底网格。
+
+------------------------------------------------------------------------
+
+### 5. 添加分段百分比标签
+
+流程：
+
+1.  用 `dplyr` 汇总数据：
+
+``` r
+plotdata <- mpg %>%
+  group_by(class, drv) %>%
+  summarize(n = n()) %>%
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+```
+
+知识点：
+
+-   `group_by(class, drv)` + `summarize(n = n())`：按类别组合计数。
+-   `pct = n/sum(n)`：在每个 `class` 内部，计算各 `drv` 占比。
+-   `lbl` 用于图中显示文字标签。
+
+2.  图中使用 `geom_text`：
+
+``` r
+geom_text(aes(label = lbl),
+          position = position_stack(vjust = 0.5))
+```
+
+-   `position_stack(vjust = 0.5)`：让文字在堆叠柱子每段中间位置。
+
+------------------------------------------------------------------------
+
+## 三、数值 vs. 数值（Quantitative vs Quantitative）
+
+### 1. Scatterplot 散点图
+
+例子：`Salaries` 数据集里：
+
+-   `yrs.since.phd`：获得 PhD 后的年数 —— 数值
+-   `salary`：工资 —— 数值
+
+基本图：
+
+``` r
+ggplot(Salaries, aes(x = yrs.since.phd, y = salary)) +
+  geom_point()
+```
+
+知识点：
+
+1.  散点图用于查看两个数值变量之间的关系，是否：
+
+    -   正相关、负相关、无关系？
+    -   是否存在模式、聚类、异常点？
+
+2.  Aesthetic 参数：
+
+    -   `color`：点的颜色
+    -   `size`：点的大小
+    -   `shape`：点形状
+    -   `alpha`：透明度（0–1），用于缓解过度覆盖。
+
+增强版：
+
+``` r
+geom_point(color="cornflowerblue", size = 2, alpha = .8)
+scale_y_continuous(label = scales::dollar, limits = c(50000,250000))
+scale_x_continuous(breaks = seq(0,60,10), limits = c(0,60))
+```
+
+核心点：
+
+-   `scale_*_continuous`：控制轴的范围和刻度。
+-   `label = dollar`：y 轴显示美元格式。
+
+------------------------------------------------------------------------
+
+### 2. Line Plot 折线图（时间序列）
+
+例子：`gapminder` 的美国数据：
+
+-   `year`：年份（时间）—— 数值 / 时间顺序
+-   `lifeExp`：预期寿命 —— 数值
+
+基本线图：
+
+``` r
+ggplot(plotdata, aes(x = year, y = lifeExp)) +
+  geom_line()
+```
+
+知识点：
+
+1.  当一个变量是**时间**时，折线图可以显示变化趋势。
+
+2.  加点、加标题：
+
+``` r
+geom_point(size = 3, color = "steelblue")
+labs(x = "Year",
+     y = "Life Expectancy (years)",
+     title = "Life expectancy changes over time",
+     subtitle = "United States (1952-2007)",
+     caption = "Source: http://www.gapminder.org/data/")
+```
+
+-   `subtitle`、`caption`：展示更多说明文字和数据来源。
+
+------------------------------------------------------------------------
+
+## 四、分类 vs. 数值（Categorical vs Quantitative）
+
+### 1. Bar Chart on Summary Statistics 均值柱状图
+
+步骤：
+
+1.  先用 `dplyr` 计算各组均值：
+
+``` r
+plotdata <- Salaries %>%
+  group_by(rank) %>%
+  summarize(mean_salary = mean(salary))
+```
+
+2.  再用 `geom_bar(stat = "identity")`：
+
+``` r
+ggplot(plotdata, aes(x = rank, y = mean_salary)) +
+  geom_bar(stat = "identity")
+```
+
+知识点：
+
+-   `stat = "identity"`：表示 y 值**直接用数据**里的
+    `mean_salary`，而不是计数。
+-   适合展示**各组的平均值、总和等汇总量**。
+
+美化版里：
+
+``` r
+geom_text(aes(label = dollar(mean_salary)), vjust = -0.25)
+scale_y_continuous(breaks = ..., label = dollar)
+```
+
+-   在柱顶显示具体数值标签。
+-   用 `\n` 在 label 里换行，让 x 轴标签变两行（比如
+    “Assistant\nProfessor”）。
+
+> 局限：只展示了**集中趋势（均值）**，看不到每组内部的分布情况，所以后面才有
+> density / boxplot / violin 等图。
+
+------------------------------------------------------------------------
+
+### 2. Kernel Density Plot 核密度曲线
+
+全体工资分布：
+
+``` r
+ggplot(Salaries, aes(x = salary)) +
+  geom_density() +
+  labs(title = "Salary distribution by rank")
+```
+
+按 `rank` 分组叠加：
+
+``` r
+ggplot(Salaries, aes(x = salary, fill = rank)) +
+  geom_density(alpha = 0.4) +
+  labs(title = "Salary distribution by rank")
+```
+
+知识点：
+
+1.  核密度估计是**平滑的直方图**，展示连续变量的分布形状。
+2.  同一图里用不同颜色、透明度叠加多个组的密度曲线 →
+    比较不同组分布差异（位置、形状、尾部等）。
+
+------------------------------------------------------------------------
+
+### 3. Box Plot 箱线图
+
+``` r
+ggplot(Salaries, aes(x = rank, y = salary)) +
+  geom_boxplot()
+```
+
+知识点：
+
+-   箱线图显示：
+
+    -   中位数（箱体中线）
+    -   Q1, Q3（箱体上下边）
+    -   “须”（通常延伸到 1.5 IQR 内）
+    -   超出须的点当作可能异常值绘制。
+
+带缺口（notch）的箱线图：
+
+``` r
+geom_boxplot(notch = TRUE, fill = "cornflowerblue", alpha = .7)
+```
+
+-   如果两个箱线图的缺口不重叠 → 说明中位数差异在大约 95%
+    置信水平下显著（粗略判断，不是严格统计检验）。
+
+优点：可以同时比较很多组的分布，中位数和离散程度。
+
+------------------------------------------------------------------------
+
+### 4. Violin Plot 小提琴图
+
+``` r
+ggplot(Salaries, aes(x = rank, y = salary)) +
+  geom_violin()
+```
+
+知识点：
+
+-   本质上是**核密度图的旋转&镜像**，围绕中轴对称。
+-   更详细地展示分布形状（多峰、尾部等）。
+
+叠加箱线图：
+
+``` r
+geom_violin(fill = "cornflowerblue") +
+geom_boxplot(width = .15,
+             fill = "orange",
+             outlier.color = "orange",
+             outlier.size = 2)
+```
+
+-   **组合优点**：既看到分布整体形状，又看到中位数、四分位位置。
+
+------------------------------------------------------------------------
+
+### 5. Mean/SEM Plot 均值 + 标准误差条
+
+先算汇总统计：
+
+``` r
+plotdata <- Salaries %>%
+  group_by(rank) %>%
+  summarize(n = n(),
+            mean = mean(salary),
+            sd = sd(salary),
+            se = sd / sqrt(n))
+```
+
+然后画图：
+
+``` r
+ggplot(plotdata,
+       aes(x = rank, y = mean, group = 1)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = .1)
+```
+
+知识点：
+
+-   `mean`：各组平均工资。
+-   `sd`：标准差。
+-   `se`：标准误差 = sd / sqrt(n)，表示平均值的不确定程度。
+-   `geom_errorbar`：画出均值 ± 标准误差，形成“误差条”。
+
+扩展到 rank + sex：
+
+``` r
+group_by(rank, sex)
+```
+
+然后在图中：
+
+-   `color = sex`, `group = sex` → 为不同性别画**分组的均值线 +
+    误差条**。
+
+------------------------------------------------------------------------
+
+### 6. Cleveland Dot Chart 克利夫兰点图
+
+目标：比较很多组的一个数值指标（例如：亚洲各国 2007 年寿命）。
+
+``` r
+plotdata <- gapminder %>%
+  filter(continent == "Asia", year == 2007)
+
+ggplot(plotdata, aes(x = lifeExp, y = country)) +
+  geom_point()
+```
+
+知识点：
+
+-   y 轴是分类变量（国家），x 轴是数值（寿命）。
+-   点图比条形图更紧凑，适合展示很多组。
+
+使用 `reorder` 按寿命排序 y 轴：
+
+``` r
+aes(y = reorder(country, lifeExp))
+```
+
+-   让国家按寿命从低到高排，比较更直观。
+
+添加线段：
+
+``` r
+geom_segment(aes(x = 40, xend = lifeExp,
+                 y = reorder(country, lifeExp),
+                 yend = reorder(country, lifeExp)),
+             color = "lightgrey")
+```
+
+-   从固定起点（比如 40）画一条横向线到该国寿命位置，形成“棒 +
+    点”的效果，易读。
+
+------------------------------------------------------------------------
+
+## 小结：你需要掌握的核心知识点
+
+1.  **根据变量类型选图：**
+
+    -   两个分类 → 各种条形图（stacked、grouped、segmented）。
+    -   两个数值 → 散点图、折线图。
+    -   一个分类一个数值 →
+        汇总柱状图、密度图、箱线图、小提琴图、均值+误差条、Cleveland
+        点图。
+
+2.  **ggplot2 语法结构：**
+
+    -   `ggplot(data, aes(...)) + geom_...() + ...`
+    -   使用 `position` 控制条形的布局方式。
+    -   使用 `scale_*` 和 `labs` 控制坐标轴、标题、标签。
+
+3.  **dplyr 数据预处理：**
+
+    -   `group_by()` + `summarize()`：按组计算统计量（count, mean, sd,
+        se）。
+    -   `mutate()`：添加比例、标签等变量，方便图中使用。
+
+4.  **factor & reorder：**
+
+    -   `factor(..., levels = ...)` 控制类别顺序。
+    -   `reorder(category, numeric)` 按数值排序类别，改善可读性。
+
+------------------------------------------------------------------------

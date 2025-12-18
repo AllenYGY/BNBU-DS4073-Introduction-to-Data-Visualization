@@ -1,0 +1,225 @@
+---
+title: "PRSA Data Preprocessing"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+params:
+  data_dir: "PRSA_Data"
+  write_output: true
+  output_file: "beijing_air_processed.csv"
+---
+
+This notebook follows the preprocessing plan in `data_preprocess.md` to ingest, clean, engineer features, validate, and optionally export the Beijing PRSA data.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(zoo)
+library(slider)
+```
+
+## 1) Ingest and combine
+
+```{r ingest}
+data_dir <- if (!is.null(params$data_dir)) params$data_dir else "PRSA_Data"
+csv_files <- list.files(data_dir, pattern = "\\.csv$", full.names = TRUE)
+
+stopifnot(length(csv_files) > 0)
+
+air_raw <- purrr::map_dfr(
+  csv_files,
+  readr::read_csv,
+  show_col_types = FALSE,
+  id = "source_file"
+) %>%
+  clean_names()
+
+glimpse(air_raw)
+```
+
+## 2) Basic cleaning and time
+
+```{r time-clean}
+air <- air_raw %>%
+  mutate(
+    datetime = make_datetime(year, month, day, hour, tz = "Asia/Shanghai"),
+    station = factor(station)
+  ) %>%
+  select(source_file, station, datetime, everything(), -no)
+
+numeric_cols <- c("pm2_5", "pm10", "so2", "no2", "co", "o3", "temp", "pres", "dewp", "rain", "wspm")
+
+# Interpolate within station, allow short gaps only
+interp_short <- function(x) {
+  zoo::na.approx(x, maxgap = 6, na.rm = FALSE)
+}
+
+air_interp <- air %>%
+  arrange(station, datetime) %>%
+  group_by(station) %>%
+  mutate(across(all_of(numeric_cols), interp_short)) %>%
+  ungroup()
+
+missing_after_interp <- air_interp %>%
+  summarise(across(all_of(numeric_cols), ~ mean(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "column", values_to = "missing_rate") %>%
+  mutate(missing_pct = scales::percent(missing_rate, accuracy = 0.1)) %>%
+  arrange(desc(missing_rate))
+
+missing_after_interp
+```
+
+## 3) Core feature engineering
+
+```{r feature-engineering}
+simplify_wd <- function(wd) {
+  case_when(
+    wd %in% c("N", "NNE", "NE", "ENE") ~ "NE",
+    wd %in% c("E", "ESE", "SE", "SSE") ~ "SE",
+    wd %in% c("S", "SSW", "SW", "WSW") ~ "SW",
+    wd %in% c("W", "WNW", "NW", "NNW") ~ "NW",
+    TRUE ~ "CV"
+  )
+}
+
+air_feat <- air_interp %>%
+  mutate(
+    month_num = month(datetime),
+    season = case_when(
+      month_num %in% 3:5 ~ "Spring",
+      month_num %in% 6:8 ~ "Summer",
+      month_num %in% 9:11 ~ "Autumn",
+      TRUE ~ "Winter"
+    ),
+    season_year = if_else(month_num < 3, year(datetime) - 1L, year(datetime)),
+    wd_simple = simplify_wd(wd)
+  ) %>%
+  arrange(station, datetime)
+
+air_feat <- air_feat %>%
+  group_by(station) %>%
+  mutate(
+    wd_run_id = cumsum(wd_simple != lag(wd_simple, default = first(wd_simple))),
+    crain_24h = slider::slide_dbl(replace_na(rain, 0), sum, .before = 23, .complete = FALSE)
+  ) %>%
+  group_by(station, wd_run_id) %>%
+  mutate(
+    cws = cumsum(replace_na(wspm, 0))
+  ) %>%
+  ungroup()
+
+region_map <- tribble(
+  ~station, ~region,
+  "Dingling", "Suburban",
+  "Huairou", "Suburban",
+  "Changping", "Suburban",
+  "Shunyi", "Suburban",
+  "Aotizhongxin", "Urban",
+  "Dongsi", "Urban",
+  "Guanyuan", "Urban",
+  "Gucheng", "Urban",
+  "Nongzhanguan", "Urban",
+  "Tiantan", "Urban",
+  "Wanliu", "Urban",
+  "Wanshouxigong", "Urban"
+)
+
+air_feat <- air_feat %>%
+  left_join(region_map, by = "station") %>%
+  mutate(region = factor(region, levels = c("Suburban", "Urban")))
+
+aqi_breaks <- c(-Inf, 35, 75, 115, 150, 250, Inf)
+aqi_labels <- c("Good", "Moderate", "Unhealthy-SG", "Unhealthy", "Very Unhealthy", "Hazardous")
+
+air_feat <- air_feat %>%
+  mutate(
+    aqi_level = cut(pm2_5, breaks = aqi_breaks, labels = aqi_labels, right = FALSE, ordered_result = TRUE)
+  )
+
+glimpse(air_feat)
+```
+
+## 4) Quick visual diagnostics
+
+```{r visuals}
+# Missing percentage by column after interpolation
+missing_bar <- missing_after_interp %>%
+  mutate(column = fct_reorder(column, missing_rate))
+
+p_missing <- ggplot(missing_bar, aes(x = column, y = missing_rate)) +
+  geom_col(fill = "#69b3a2") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(title = "Missing share after interpolation", x = NULL, y = "Missing rate")
+
+# Time coverage by station
+coverage <- air_feat %>%
+  mutate(date = as.Date(datetime)) %>%
+  group_by(station) %>%
+  summarise(start = min(date), end = max(date), .groups = "drop") %>%
+  mutate(station = fct_reorder(station, start))
+
+p_coverage <- ggplot(coverage, aes(y = station)) +
+  geom_linerange(aes(xmin = start, xmax = end), color = "#1f78b4", linewidth = 1.2) +
+  labs(title = "Date coverage by station", x = "Date", y = "Station") +
+  theme_minimal()
+
+# PM2.5 distribution by season_year
+p_pm25 <- air_feat %>%
+  ggplot(aes(x = factor(season_year), y = pm2_5, fill = season)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "PM2.5 by seasonal year", x = "Seasonal year (Mar–Feb)", y = "PM2.5 (ug/m^3)", fill = "Season") +
+  theme_minimal()
+
+p_missing
+p_coverage
+p_pm25
+```
+
+## 5) Validation checks
+
+```{r validation}
+dup_check <- air_feat %>%
+  count(station, datetime) %>%
+  filter(n > 1)
+
+stopifnot(nrow(dup_check) == 0)
+
+remaining_na <- air_feat %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "column", values_to = "na_count") %>%
+  arrange(desc(na_count))
+
+summary_snapshot <- air_feat %>%
+  summarise(
+    rows = n(),
+    stations = n_distinct(station),
+    start = min(datetime, na.rm = TRUE),
+    end = max(datetime, na.rm = TRUE),
+    seasonal_year_min = min(season_year, na.rm = TRUE),
+    seasonal_year_max = max(season_year, na.rm = TRUE)
+  )
+
+list(
+  remaining_na = remaining_na,
+  summary = summary_snapshot
+)
+```
+
+## 6) Export
+
+```{r export}
+if (isTRUE(params$write_output)) {
+  out_file <- if (!is.null(params$output_file)) params$output_file else "beijing_air_processed.csv"
+  readr::write_csv(air_feat, out_file)
+  cat("Saved to", out_file, "\n")
+} else {
+  cat("Skipping export (set params$write_output = TRUE to save)\n")
+}
+View(air_feat)
+```
